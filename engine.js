@@ -1,4 +1,4 @@
-const state = { sprites: [], bg_color: "black" };
+const state = { sprites: [], player: null, bg_color: "black" };
 const assets = {};
 
 const camera = { x: 0, y: 0 }
@@ -54,7 +54,7 @@ async function loadAll(list) {
 
 // Добавление спрайтов 
 function addSprite(path, x, y, w, h) {
-  state.sprites.push({ path, x, y, w, h });
+  state.sprites.push({ path, x, y, w, h, scaleX: 1, scaleY: 1 });
 }
 
 function createRenderer(canvas, ctx, assets, state) {
@@ -66,8 +66,16 @@ function createRenderer(canvas, ctx, assets, state) {
     for (const s of state.sprites) {
       const img = assets[s.path];
       if (!img) continue;
-
-      ctx.drawImage(img, s.x, s.y, s.w, s.h);
+      // if(s.scaleX === -1 || s.scaleY === -1){
+        // ctx.save();
+        // ctx.translate(s.x + s.w, s.y);
+        // ctx.scale(s.scaleX, s.scaleY);
+        ctx.drawImage(img, s.x, s.y, s.w, s.h);
+        // ctx.restore();
+      // }
+      // else {
+      //   ctx.drawImage(img, s.x, s.y, s.w, s.h);
+      // }
     }
   }
 
@@ -77,23 +85,36 @@ function createRenderer(canvas, ctx, assets, state) {
 
 function startLoop(render) {
   function loop() {
-    // update();
+    update();
     render();
     requestAnimationFrame(loop);
   }
   loop();
 }
 
-function update() {
-  state.sprites[0].x += 1;
-}
+
+
+
+
+
+
 
 
 //Запуск и работа с мини-движком
 const { canvas, ctx  } = createEngine();
 
 const render = createRenderer(canvas, ctx, assets, state);
-startLoop(render);
+
+function update() {
+  const p = state.player;
+
+  if (!p) return;
+
+  if (keys["a"]) p.x -= p.speed;
+  if (keys["d"]) p.x += p.speed;
+  if (keys["w"]) p.y -= p.speed;
+  if (keys["s"]) p.y += p.speed;
+}
 
 async function start() {
   await loadAll(["crab7.png", "tiles_03.png"]);
@@ -104,7 +125,36 @@ async function start() {
   //   }
   // }
 
-  addSprite("crab7.png", 100, 100, 64, 64);
+  state.player = createPlayer();
+  state.sprites.push(state.player);
+
+  startLoop(render);
 }
 
 start();
+
+
+
+
+function createPlayer() {
+  return {
+    path: "crab7.png",
+    x: 100,
+    y: 100,
+    w: 64,
+    h: 64,
+    speed: 3,
+    scaleX: 1, scaleY: 1
+  };
+}
+
+
+const keys = {};
+
+window.addEventListener("keydown", (e) => {
+  keys[e.key] = true;
+});
+
+window.addEventListener("keyup", (e) => {
+  keys[e.key] = false;
+});
