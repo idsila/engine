@@ -18,3 +18,27 @@ function setFiled() {
   }
 }
 // setFiled();
+
+
+
+const p = state.player;
+
+  if (!p) return;
+
+  if (keys["a"]) p.x -= p.speed;
+  if (keys["d"]) p.x += p.speed;
+  if (keys["w"]) p.y -= p.speed;
+  if (keys["s"]) p.y += p.speed;
+  
+  
+  
+  
+  const keys = {};
+
+window.addEventListener("keydown", (e) => {
+  keys[e.key] = true;
+});
+
+window.addEventListener("keyup", (e) => {
+  keys[e.key] = false;
+});
