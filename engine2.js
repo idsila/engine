@@ -35,6 +35,12 @@ class Application {
       }
     } 
 
+    
+    this.addEvent("click", "main", (event) => {
+      this.find(event, event.clientX, event.clientY);
+      // console.log(e.clientX, e.clientY)
+    })
+
   }
   
   resize() {
@@ -156,21 +162,26 @@ class Application {
   
   
   // Поиск элемента на который я нажал
-  find(x = 0, y = 0){
+  find(event, x = 0, y = 0){
     for (const id of this.levels.toReversed()) {
       for (const obj of this.stage[id]) {
-        this.findObject(x, y, obj);
+        this.findObject(event, x, y, obj);
       }
     }
   }
-  findObject(x, y, obj){
-    if(obj.position.x <= x && obj.position.x+obj.width >= x && obj.position.y <= y && obj.position.y+obj.height >= y){
-      console.log(x,(obj.position.x <= x && obj.position.x+obj.width >= x), y, (obj.position.y <= y && obj.position.y+obj.height >= y),' ___ ', obj.position.x, obj.position.y)
+  findObject(event, x, y, obj, parent = { position: { x: 0, y:0 }, scale: { x: 1, y: 1 }}){
+    // У нас на изменение позиции влияет scale anchor
+
+    if(obj.position.x + parent.position.x <= x && obj.position.x+parent.position.x+obj.width >= x && obj.position.y+parent.position.y <= y && obj.position.y+parent.position.y+obj.height >= y){
+      // console.log(x,(obj.position.x <= x && obj.position.x+obj.width >= x), y, (obj.position.y <= y && obj.position.y+obj.height >= y),' ___ ', obj.position.x, obj.position.y)
       //obj.rotation = 0.5;
-      console.log(obj.width, obj.height)
+      obj.events.forEach((fn) => {
+        fn(event);
+      });
+      // console.log(obj.events)
     }
     for (const child of obj.children) {
-      this.findObject(x, y,  child);
+      this.findObject(event, x, y,  child, obj);
     }
   }
   
@@ -181,8 +192,6 @@ class Application {
   removeScene(){
     this.tickers = [];
   }
-  
-  // 
 }
 
 
@@ -217,7 +226,8 @@ class Container {
     this.anchor.y = y;
   }
 
-  on(event, callback){
+  on(callback){
+    this.events.push(callback);
     // Тут логика 
   }
   addChild(entity){
@@ -277,8 +287,8 @@ async function startGame(param) {
   world.addChild(s1);
   
   
-  playerBox = new Container();
-  //playerBox = new Sprite(app.assets["tiles_03.png"]);
+  // playerBox = new Container();
+  playerBox = new Sprite(app.assets["tiles_03.png"]);
 
   playerBox.zIndex = 30;
   playerBox.setPosition(100, 100);
@@ -288,11 +298,13 @@ async function startGame(param) {
   player = new Sprite(app.assets["crab7.png"]);
   player.width = 100;
   player.height = 100;
-  player.setPosition(50, 50);
-  player.setScale(-1, 1);
-  
-  player.setAnchor(0.5, 0.5)
+  player.setPosition(0, 0);
+  player.setScale(1, 1);
+  // player.setAnchor(0.5, 0.5)
   //player.setScale(-1, 1);
+  player.on((e) => {
+    
+  })
   
   
   playerBox.addChild(player);
