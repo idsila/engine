@@ -1,11 +1,18 @@
-class App{
+class Application {
   ctx = null;
   canvas = null;
   dpr = 1;
   width = 0;
   height = 0;
   
+  bgColor = "black";
   assets = {};
+  
+  
+  stage = {};
+  levels = [];
+  
+  tickers = [];
   events = {};
   
   
@@ -21,6 +28,13 @@ class App{
     this.ctx = this.canvas.getContext("2d");
     this.resize();
     window.addEventListener("resize", () => {  this.resize() });
+    
+    this.ticker = {
+      add: (callback) =>{
+        this.tickers.push(callback);
+      }
+    } 
+
   }
   
   resize() {
@@ -56,12 +70,14 @@ class App{
   
   
   
+  
   // Цикл для жизни приложения и отрисовки
-  startLoop(update, render) {
+  startLoop(update) {
     const loop = () => {
       this.clear();
       update();
-      render();
+      this.render();
+      this.tickers.forEach(fn => fn())
       requestAnimationFrame(loop);
     };
     loop();
@@ -71,13 +87,14 @@ class App{
   // Очистака кадра
   clear() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.fillStyle = this.bgColor;
+    this.ctx.fillRect(0, 0, this.canvas.clientWidth, this.canvas.clientHeight);
   }
   
   
   // Добавление и удаление эвентов 
   addEvent(type, name, callback){
     const path = `${type}/${name}`;
-    
     if(this.events[path]) return;
     const bound = callback.bind(this);
     this.events[path] = bound;
@@ -86,32 +103,209 @@ class App{
   removeEvent(type, name) {
     const path = `${type}/${name}`;
     const callback = this.events[path];
-    
     if (!callback) return;
     this.canvas.removeEventListener(type, callback);
     delete this.events[path];
+  }
+  
+  
+  addChild(entity){
+    if(!this.stage[entity.zIndex]) {
+      this.stage[entity.zIndex] = [];
+      this.stage[entity.zIndex].push(entity);
+    } else {
+      this.stage[entity.zIndex].push(entity);
+    }
+    this.levels = Object.keys(this.stage).sort((a, b) => {
+      if (a * 1 > b * 1) return 1
+      if (a * 1 == b * 1) return 0
+      if (a * 1 < b * 1) return -1
+    });
+  }
+  render(){
+    for(const id of this.levels){
+      for (const obj of this.stage[id]) {
+        this.renderObject(obj);
+      }
+    }
+  }
+  renderObject(obj) {
+    const ctx = this.ctx;
+    ctx.save();
+  
+    // 👉 применяем трансформацию объекта
+    ctx.translate(obj.position.x, obj.position.y);
+    ctx.rotate(obj.rotation);
+    ctx.scale(obj.scale.x, obj.scale.y);
+    const offsetX = obj.width * obj.anchor.x;
+    const offsetY = obj.height * obj.anchor.y;
+
+
+    // 👉 рисуем сам объект
+    if (obj?.resource) {
+      ctx.drawImage(obj.resource, -offsetX, -offsetY, obj.width, obj.height);
+    }
+  
+    // 👉 рисуем детей (уже в системе координат родителя!)
+    for (const child of obj.children) {
+      this.renderObject(child);
+    }
+  
+    ctx.restore();
+  }
+  
+  
+  // Поиск элемента на который я нажал
+  find(x = 0, y = 0){
+    for (const id of this.levels.toReversed()) {
+      for (const obj of this.stage[id]) {
+        this.findObject(x, y, obj);
+      }
+    }
+  }
+  findObject(x, y, obj){
+    if(obj.position.x <= x && obj.position.x+obj.width >= x && obj.position.y <= y && obj.position.y+obj.height >= y){
+      console.log(x,(obj.position.x <= x && obj.position.x+obj.width >= x), y, (obj.position.y <= y && obj.position.y+obj.height >= y),' ___ ', obj.position.x, obj.position.y)
+      //obj.rotation = 0.5;
+      console.log(obj.width, obj.height)
+    }
+    for (const child of obj.children) {
+      this.findObject(x, y,  child);
+    }
+  }
+  
+  // Отрисовка сцен
+  drawScene(array){
+    
+  }
+  removeScene(){
+    this.tickers = [];
+  }
+  
+  // 
 }
+
+
+
+class Container {
+  width =  0;
+  height = 0;
+  rotation = 0;
+  scale = { x: 1, y: 1 };
+  position = { x: 0, y: 0 };
+  anchor = { x: 0, y: 0 }; 
+  zIndex = 1;
+  events = [];
+  children = [];
   
   
+  constructor(){
+    return this;
+  }
   
   
+  setPosition(x, y) {
+    this.position.x = x;
+    this.position.y = y;
+  }
+  setScale(x, y) {
+    this.scale.x = x;
+    this.scale.y = y;
+  }
+  setAnchor(x, y) {
+    this.anchor.x = x;
+    this.anchor.y = y;
+  }
+
+  on(event, callback){
+    // Тут логика 
+  }
+  addChild(entity){
+    this.children.push(entity);
+  }
   
 }
 
 
-const app = new App();
-console.log(app)
+class Sprite extends Container{
+  resource = null;
+  constructor(resource){
+    super();
+    this.resource = resource;
+  }
+}
 
 
 
-state = {
-  sprites: [],
-  blocks: [],
-  walls: [],
-  enemys: [],
-  interfaces: [],
-  player: null,
-  playerContainer: null,
-  bgColor: null,
-  tileSize: 50,
-};
+
+
+
+
+
+
+
+let player, playerBox = null;
+let app = null;
+
+async function startGame(param) {
+  app = new Application();
+  await app.loadAll(["crab7.png", "tiles_03.png", "flip3.png"])
+  
+  const camera = new Container();
+  camera.setPosition(0, 0);
+  camera.setScale(1, 1);
+  camera.setAnchor(0, 0);
+  
+  const world = new Container();
+  camera.addChild(world);
+  app.addChild(camera);
+
+  const s = new Sprite(app.assets["flip3.png"]);
+  s.zIndex = 2;
+  s.setPosition(0,0);
+  
+  s.width = 100;
+  s.height = 100;
+  world.addChild(s);
+
+
+  const s1 = new Sprite(app.assets["flip3.png"]);
+  s1.zIndex = 3;
+  s1.setPosition(100, 0);
+  s1.width = 100;
+  s1.height = 100;
+  world.addChild(s1);
+  
+  
+  playerBox = new Container();
+  //playerBox = new Sprite(app.assets["tiles_03.png"]);
+
+  playerBox.zIndex = 30;
+  playerBox.setPosition(100, 100);
+  playerBox.width = 100;
+  playerBox.height = 100;
+
+  player = new Sprite(app.assets["crab7.png"]);
+  player.width = 100;
+  player.height = 100;
+  player.setPosition(50, 50);
+  player.setScale(-1, 1);
+  
+  player.setAnchor(0.5, 0.5)
+  //player.setScale(-1, 1);
+  
+  
+  playerBox.addChild(player);
+  world.addChild(playerBox);
+
+  app.ticker.add(() => {
+  })
+
+
+  
+  
+  app.startLoop(() => {
+    //player.position(player._position.x+1, 0)
+  })
+}
+startGame()
