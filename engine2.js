@@ -1,23 +1,24 @@
 class Application {
-  ctx = null;
-  canvas = null;
-  dpr = 1;
-  width = 0;
-  height = 0;
-  
-  bgColor = "black";
-  assets = {};
-  
-  
-  stage = {};
-  levels = [];
-  
-  tickers = [];
-  events = {};
-  
   
   constructor(){
+    this.ctx = null;
+    this.canvas = null;
+    this.dpr = 1;
+    this.width = 0;
+    this.height = 0;
+  
+    this.bgColor = "black";
+    this.assets = {};
+  
+    this.stage = new Container();
+  
+    this.tickers = [];
+    this.events = {};
+    
+    this.propagation = true;
+  
     this.#initApp();
+    
   }
   
   #initApp(){
@@ -115,27 +116,18 @@ class Application {
   }
   
   
-  addChild(entity){
-    if(!this.stage[entity.zIndex]) {
-      this.stage[entity.zIndex] = [];
-      this.stage[entity.zIndex].push(entity);
-    } else {
-      this.stage[entity.zIndex].push(entity);
-    }
-    this.levels = Object.keys(this.stage).sort((a, b) => {
-      if (a * 1 > b * 1) return 1
-      if (a * 1 == b * 1) return 0
-      if (a * 1 < b * 1) return -1
-    });
+  
+  
+  addChild(entity) {
+    this.stage.addChild(entity);
   }
   render(){
-    for(const id of this.levels){
-      for (const obj of this.stage[id]) {
-        this.renderObject(obj);
-      }
-    }
+    this.quantityStage = 0;
+    this.renderObject(this.stage);
   }
   renderObject(obj) {
+    this.quantityStage+=1;
+    
     const ctx = this.ctx;
     ctx.save();
   
@@ -149,6 +141,7 @@ class Application {
 
     // 👉 рисуем сам объект
     if (obj?.resource) {
+      
       ctx.drawImage(obj.resource, -offsetX, -offsetY, obj.width, obj.height);
     }
   
@@ -163,25 +156,80 @@ class Application {
   
   // Поиск элемента на который я нажал
   find(event, x = 0, y = 0){
-    for (const id of this.levels.toReversed()) {
-      for (const obj of this.stage[id]) {
-        this.findObject(event, x, y, obj);
-      }
+    this.propagation = true;
+    for (const obj of this.stage.children.toReversed()) {
+      this.findObject(event, x, y, obj);
     }
   }
-  findObject(event, x, y, obj, parent = { position: { x: 0, y:0 }, scale: { x: 1, y: 1 }}){
-    // У нас на изменение позиции влияет scale anchor
+  findObject(event, x, y, obj, transform = { x: 0, y: 0, scaleX: 1, scaleY: 1 }){
+    if(this.propagation){
+      // Мв не учитываем rotation то есть поворот
+    
+      const placeX =
+  transform.x +
+  obj.position.x * transform.scaleX;
 
-    if(obj.position.x + parent.position.x <= x && obj.position.x+parent.position.x+obj.width >= x && obj.position.y+parent.position.y <= y && obj.position.y+parent.position.y+obj.height >= y){
-      // console.log(x,(obj.position.x <= x && obj.position.x+obj.width >= x), y, (obj.position.y <= y && obj.position.y+obj.height >= y),' ___ ', obj.position.x, obj.position.y)
-      //obj.rotation = 0.5;
-      obj.events.forEach((fn) => {
-        fn(event);
-      });
-      // console.log(obj.events)
+const placeY =
+  transform.y +
+  obj.position.y * transform.scaleY;
+
+const nextTransform = {
+  x: placeX,
+  y: placeY,
+  scaleX: transform.scaleX * obj.scale.x,
+  scaleY: transform.scaleY * obj.scale.y
+};
+
+const anchorX = obj.anchor.x * obj.width;
+const anchorY = obj.anchor.y * obj.height;
+
+const x1 = -anchorX;
+const x2 = x1 + obj.width;
+
+const y1 = -anchorY;
+const y2 = y1 + obj.height;
+
+const realX1 = x1 * nextTransform.scaleX;
+const realX2 = x2 * nextTransform.scaleX;
+
+const realY1 = y1 * nextTransform.scaleY;
+const realY2 = y2 * nextTransform.scaleY;
+
+const left =
+  Math.min(realX1, realX2) + placeX;
+
+const right =
+  Math.max(realX1, realX2) + placeX;
+
+const top =
+  Math.min(realY1, realY2) + placeY;
+
+const bottom =
+  Math.max(realY1, realY2) + placeY;
+
+if (
+  x >= left &&
+  x <= right &&
+  y >= top &&
+  y <= bottom
+) {
+        obj.events.forEach((obj) => {
+          if(obj.type === event.type){
+            obj.callback(event);
+          }
+        });
+        if(!obj.propagation){
+          this.propagation = false;
+          return 0;
+        }
+      }
+    
+
+    for (const child of obj.children.toReversed()) {
+      this.findObject(event, x, y,  child, nextTransform);
     }
-    for (const child of obj.children) {
-      this.findObject(event, x, y,  child, obj);
+
+    
     }
   }
   
@@ -197,18 +245,18 @@ class Application {
 
 
 class Container {
-  width =  0;
-  height = 0;
-  rotation = 0;
-  scale = { x: 1, y: 1 };
-  position = { x: 0, y: 0 };
-  anchor = { x: 0, y: 0 }; 
-  zIndex = 1;
-  events = [];
-  children = [];
-  
-  
   constructor(){
+    this.width = 0;
+    this.height = 0;
+    this.rotation = 0;
+    this.propagation = true;
+    this.scale = { x: 1, y: 1 };
+    this.position = { x: 0, y: 0 };
+    this.anchor = { x: 0, y: 0 };
+    this.zIndex = 1;
+    this.events = [];
+    this.children = [];
+    this.stage = {};
     return this;
   }
   
@@ -225,27 +273,30 @@ class Container {
     this.anchor.x = x;
     this.anchor.y = y;
   }
-
-  on(callback){
-    this.events.push(callback);
-    // Тут логика 
+  stopPropagation(){
+    this.propagation = false;
   }
-  addChild(entity){
-    this.children.push(entity);
+
+  on(type, callback){
+    this.events.push({ type, callback });
   }
   
+  
+  addChild(entity) {
+    this.children.push(entity);
+    this.children.sort((a, b) => {
+      return a.zIndex - b.zIndex;
+    });
+  }
 }
 
 
 class Sprite extends Container{
-  resource = null;
   constructor(resource){
     super();
     this.resource = resource;
   }
 }
-
-
 
 
 
@@ -266,7 +317,7 @@ async function startGame(param) {
   camera.setScale(1, 1);
   camera.setAnchor(0, 0);
   
-  const world = new Container();
+  world = new Container();
   camera.addChild(world);
   app.addChild(camera);
 
@@ -279,11 +330,17 @@ async function startGame(param) {
   world.addChild(s);
 
 
-  const s1 = new Sprite(app.assets["flip3.png"]);
+  const s1 = new Sprite(app.assets["tiles_03.png"]);
   s1.zIndex = 3;
-  s1.setPosition(100, 0);
+  s1.setPosition(0, 0);
   s1.width = 100;
   s1.height = 100;
+  
+  s1.on("click",(e) => {
+    //playerBox.position.x++;
+    console.log("sprite1")
+  })
+  
   world.addChild(s1);
   
   
@@ -291,19 +348,31 @@ async function startGame(param) {
   playerBox = new Sprite(app.assets["tiles_03.png"]);
 
   playerBox.zIndex = 30;
-  playerBox.setPosition(100, 100);
+  playerBox.setPosition(200, 200);
   playerBox.width = 100;
   playerBox.height = 100;
+  playerBox.setAnchor(0.5, 0.5)
+  playerBox.setScale(1, 1);
+  
+
+  playerBox.stopPropagation();
 
   player = new Sprite(app.assets["crab7.png"]);
   player.width = 100;
   player.height = 100;
   player.setPosition(0, 0);
   player.setScale(1, 1);
+  
   // player.setAnchor(0.5, 0.5)
   //player.setScale(-1, 1);
-  player.on((e) => {
-    
+  playerBox.on("click",(e) => {
+    //playerBox.position.x++;
+    console.log("playerBox")
+  })
+  
+  player.on("click",(e) => {
+    //playerBox.position.x++;
+    console.log("player")
   })
   
   
