@@ -39,8 +39,19 @@ class Application {
     
     this.addEvent("click", "main", (event) => {
       this.find(event, event.clientX, event.clientY);
-      // console.log(e.clientX, e.clientY)
-    })
+    });
+    this.addEvent("touchstart", "main", (event) => {
+      // this.findEvent(event);
+      this.find(event, event.clientX, event.clientY);
+    });
+    this.addEvent("touchmove", "main", (event) => {
+      // this.findEvent(event);
+      this.find(event, event.clientX, event.clientY);
+    });
+    this.addEvent("touchend", "main", (event) => {
+      // this.findEvent(event);
+      this.find(event, event.clientX, event.clientY);
+    });
 
   }
   
@@ -125,266 +136,111 @@ class Application {
     this.quantityStage = 0;
     this.renderObject(this.stage);
   }
-  renderObject2(obj) {
-    this.quantityStage+=1;
-    
+  renderObject(obj) {
     const ctx = this.ctx;
     ctx.save();
   
-    // 👉 применяем трансформацию объекта
-    
-    
-    ctx.translate(obj.position.x, obj.position.y);
-    ctx.rotate(obj.rotation);
+    const ax = obj.width * obj.anchor.x;
+    const ay = obj.height * obj.anchor.y;
+  
+    ctx.translate(obj.position.x - ax * obj.scale.x, obj.position.y - ay * obj.scale.y);
     ctx.scale(obj.scale.x, obj.scale.y);
-    const offsetX = obj.width * obj.anchor.x;
-    const offsetY = obj.height * obj.anchor.y;
 
-
-    // 👉 рисуем сам объект
     if (obj?.resource) {
-      
-      ctx.drawImage(obj.resource, -offsetX, -offsetY, obj.width, obj.height);
+      ctx.drawImage(obj.resource, 0, 0, obj.width, obj.height);
     }
   
-    // 👉 рисуем детей (уже в системе координат родителя!)
     for (const child of obj.children) {
       this.renderObject(child);
     }
   
     ctx.restore();
   }
-  renderObject(obj) {
-  const ctx = this.ctx;
-  ctx.save();
-  
-  const ax = obj.width * obj.anchor.x;
-  const ay = obj.height * obj.anchor.y;
-  
-  ctx.translate(
-  obj.position.x - ax * obj.scale.x,
-  obj.position.y - ay * obj.scale.y
-);
-ctx.scale(obj.scale.x, obj.scale.y);
-// после НЕ надо дополнительно сдвигать  
-  if (obj?.resource) {
-    ctx.drawImage(obj.resource, 0, 0, obj.width, obj.height);
-  }
-  
-  for (const child of obj.children) {
-    this.renderObject(child);
-  }
-  
-  ctx.restore();
-}
   
   // Поиск элемента на который я нажал
-  find2(event, x = 0, y = 0){
+  find(event, x = 0, y = 0){
     this.propagation = true;
     for (const obj of this.stage.children.toReversed()) {
       this.findObject(event, x, y, obj);
     }
   }
-  findObject2(event, x, y, obj, transform = { x: 0, y: 0, scaleX: 1, scaleY: 1 }){
-    if(this.propagation){
-      // Мв не учитываем rotation то есть поворот
-    
-      const placeX =
-  transform.x +
-  obj.position.x * transform.scaleX;
+  findObject(event, x, y, obj, t = { x: 0, y: 0, sx: 1, sy: 1 }) {
+    if (!this.propagation) return;
+    console.log("event" , event.type)
+    // --- anchor в local
+    const ax = obj.anchor.x * obj.width;
+    const ay = obj.anchor.y * obj.height;
 
-const placeY =
-  transform.y +
-  obj.position.y * transform.scaleY;
+    // --- accumulate scale (как в render scale)
+    const sx = t.sx * obj.scale.x;
+    const sy = t.sy * obj.scale.y;
 
-const nextTransform = {
-  x: placeX,
-  y: placeY,
-  scaleX: transform.scaleX * obj.scale.x,
-  scaleY: transform.scaleY * obj.scale.y
-};
+    // --- world translate, строго как в renderObject (translate с anchor*scale)
+    const nextX = t.x + (obj.position.x - ax * obj.scale.x) * t.sx;
+    const nextY = t.y + (obj.position.y - ay * obj.scale.y) * t.sy;
 
-const anchorX = obj.anchor.x * obj.width;
-const anchorY = obj.anchor.y * obj.height;
 
-const x1 = -anchorX;
-const x2 = x1 + obj.width;
 
-const y1 = -anchorY;
-const y2 = y1 + obj.height;
+    // --- базовый rect в local space (как в renderObject: drawImage от 0,0)
+    let left = 0;
+    let top = 0;
+    let right = obj.width;
+    let bottom = obj.height;
+  
+    // --- scale transform rect (ВАЖНО: как canvas)
+    const x1 = left * sx;
+    const x2 = right * sx;
+    const y1 = top * sy;
+    const y2 = bottom * sy;
+  
+    left = Math.min(x1, x2) + nextX;
+    right = Math.max(x1, x2) + nextX;
+    top = Math.min(y1, y2) + nextY;
+    bottom = Math.max(y1, y2) + nextY;
+  
+  
+    // --- HIT TEST
+    if (x >= left && x <= right && y >= top && y <= bottom) {
+      
 
-const realX1 = x1 * nextTransform.scaleX;
-const realX2 = x2 * nextTransform.scaleX;
-
-const realY1 = y1 * nextTransform.scaleY;
-const realY2 = y2 * nextTransform.scaleY;
-
-const left =
-  Math.min(realX1, realX2) + placeX;
-
-const right =
-  Math.max(realX1, realX2) + placeX;
-
-const top =
-  Math.min(realY1, realY2) + placeY;
-
-const bottom =
-  Math.max(realY1, realY2) + placeY;
-
-if (
-  x >= left &&
-  x <= right &&
-  y >= top &&
-  y <= bottom
-) {
-        obj.events.forEach((obj) => {
-          if(obj.type === event.type){
-            obj.callback(event);
-          }
-        });
-        if(!obj.propagation){
-          this.propagation = false;
-          return 0;
+      for (const e of obj.events) {
+        console.log("OBJ", e.type )
+        if (e.type === event.type) {
+          e.callback(event);
         }
       }
     
-
+      // propagation как у тебя
+      if (!obj.propagation) {
+        this.propagation = false;
+        return;
+      }
+    }
+  
+    // --- children
     for (const child of obj.children.toReversed()) {
-      this.findObject(event, x, y,  child, nextTransform);
+  
+      this.findObject(event, x, y, child, {
+        x: nextX,
+        y: nextY,
+        sx,
+        sy
+      });
     }
+  }
 
-    
-    }
+  // event
+  findEvent(event){
+    console.log('event')
   }
   
   
   
-  computeWorldTransform(obj, parent) {
-  const scaleX = parent.scaleX * obj.scale.x;
-  const scaleY = parent.scaleY * obj.scale.y;
   
-  const x = parent.x + obj.position.x * parent.scaleX;
-  const y = parent.y + obj.position.y * parent.scaleY;
   
-  return {
-    x,
-    y,
-    scaleX,
-    scaleY
-  };
-}
 
 
 
-findObject3(event, x, y, obj, t = { x: 0, y: 0, sx: 1, sy: 1 }) {
-  if (!this.propagation) return;
-  
-  // --- world position (как в render translate)
-  const worldX = t.x + obj.position.x * t.sx;
-  const worldY = t.y + obj.position.y * t.sy;
-  
-  // --- accumulate scale (как в render scale)
-  const sx = t.sx * obj.scale.x;
-  const sy = t.sy * obj.scale.y;
-  
-  // --- anchor В МИРЕ
-  const ax = obj.anchor.x * obj.width;
-  const ay = obj.anchor.y * obj.height;
-  
-  // --- базовый rect в local space
-  let left = -ax;
-  let top = -ay;
-  let right = left + obj.width;
-  let bottom = top + obj.height;
-  
-  // --- scale transform rect (ВАЖНО: как canvas)
-  const x1 = left * sx;
-  const x2 = right * sx;
-  const y1 = top * sy;
-  const y2 = bottom * sy;
-  
-  left = Math.min(x1, x2) + worldX;
-  right = Math.max(x1, x2) + worldX;
-  top = Math.min(y1, y2) + worldY;
-  bottom = Math.max(y1, y2) + worldY;
-  
-  // --- HIT TEST
-  if (x >= left && x <= right && y >= top && y <= bottom) {
-    
-    for (const e of obj.events) {
-      if (e.type === event.type) {
-        e.callback(event);
-      }
-    }
-    
-    // propagation как у тебя
-    if (!obj.propagation) {
-      this.propagation = false;
-      return;
-    }
-  }
-  
-  // --- children
-  for (const child of obj.children.toReversed()) {
-    this.findObject(event, x, y, child, {
-      x: worldX,
-      y: worldY,
-      sx,
-      sy
-    });
-  }
-}
-  
-  
-  
-  
-  
-  find(event, x = 0, y = 0) {
-  this.propagation = true;
-  this.findObject(event, x, y, this.stage, 0, 0, 1, 1);
-}
-
-findObject(event, x, y, obj, parentWorldX = 0, parentWorldY = 0, parentScaleX = 1, parentScaleY = 1) {
-  if (!this.propagation) return;
-  
-  // Мировая позиция локального (0,0) объекта
-  const worldX = parentWorldX + obj.position.x * parentScaleX;
-  const worldY = parentWorldY + obj.position.y * parentScaleY;
-  const scaleX = parentScaleX * obj.scale.x;
-  const scaleY = parentScaleY * obj.scale.y;
-  
-  // Преобразуем точку мыши в локальные координаты объекта (без учёта anchor)
-  let localX = (x - worldX) / scaleX;
-  let localY = (y - worldY) / scaleY;
-  
-  // Применяем anchor (смещение начала координат)
-  const localWithAnchorX = localX + obj.anchor.x * obj.width;
-  const localWithAnchorY = localY + obj.anchor.y * obj.height;
-  
-  // Проверяем попадание в прямоугольник [0, width] × [0, height]
-  if (localWithAnchorX >= 0 && localWithAnchorX <= obj.width &&
-    localWithAnchorY >= 0 && localWithAnchorY <= obj.height) {
-    
-    // Вызываем все обработчики события на объекте
-    for (const e of obj.events) {
-      if (e.type === event.type) {
-        e.callback(event);
-      }
-    }
-    
-    // Останавливаем распространение, если нужно
-    if (!obj.propagation) {
-      this.propagation = false;
-      return;
-    }
-  }
-  
-  // Рекурсивно проверяем детей (в обратном порядке для zIndex)
-  for (const child of obj.children.slice().reverse()) {
-    this.findObject(event, x, y, child, worldX, worldY, scaleX, scaleY);
-    if (!this.propagation) break;
-  }
-}
   
   
   // Отрисовка сцен
@@ -505,8 +361,8 @@ async function startGame(param) {
   playerBox.setPosition(200, 200);
   playerBox.width = 100;
   playerBox.height = 100;
-  playerBox.setAnchor(0.5, 0.5)
-  playerBox.setScale(-1, 1);
+  playerBox.setAnchor(0, 0)
+  playerBox.setScale(1, 1);
   
 
   playerBox.stopPropagation();
@@ -514,14 +370,28 @@ async function startGame(param) {
   player = new Sprite(app.assets["crab7.png"]);
   player.width = 100;
   player.height = 100;
-  player.setPosition(0, 0);
+  player.setPosition(50, 50);
+  player.setAnchor(0.5, 0.5)
   player.setScale(1, 1);
+  player.stopPropagation();
   
   // player.setAnchor(0.5, 0.5)
   //player.setScale(-1, 1);
-  playerBox.on("click",(e) => {
+  // playerBox.on("click",(e) => {
+  //   //playerBox.position.x++;
+  //   console.log("playerBox")
+  // })
+  playerBox.on("touchstart",(e) => {
     //playerBox.position.x++;
-    console.log("playerBox")
+    console.log("playerBox touchstart")
+  })
+  playerBox.on("touchmove",(e) => {
+    //playerBox.position.x++;
+    console.log("playerBox touchmove")
+  })
+  playerBox.on("touchend",(e) => {
+    //playerBox.position.x++;
+    console.log("playerBox touchend")
   })
   
   player.on("click",(e) => {
