@@ -44,10 +44,10 @@ class Application {
       // this.findEvent(event);
       this.find(event, event.clientX, event.clientY);
     });
-    this.addEvent("touchmove", "main", (event) => {
-      // this.findEvent(event);
-      this.find(event, event.clientX, event.clientY);
-    });
+    // this.addEvent("touchmove", "main", (event) => {
+    //   // this.findEvent(event);
+    //   this.find(event, event.clientX, event.clientY);
+    // });
     this.addEvent("touchend", "main", (event) => {
       // this.findEvent(event);
       this.find(event, event.clientX, event.clientY);
@@ -159,14 +159,18 @@ class Application {
   
   // Поиск элемента на который я нажал
   find(event, x = 0, y = 0){
-    this.propagation = true;
+    let propagation = true;
     for (const obj of this.stage.children.toReversed()) {
-      this.findObject(event, x, y, obj);
+      this.findObject(propagation, event, x, y, obj);
     }
   }
-  findObject(event, x, y, obj, t = { x: 0, y: 0, sx: 1, sy: 1 }) {
-    if (!this.propagation) return;
-    console.log("event" , event.type)
+  findObject(propagation, event, x, y, obj, t = { x: 0, y: 0, sx: 1, sy: 1 }) {
+    let nextPropagation = propagation;
+    if (!nextPropagation) return;
+    // console.log(event.type)
+    console.log("event" ,  event.clientX, event.touches)
+
+
     // --- anchor в local
     const ax = obj.anchor.x * obj.width;
     const ay = obj.anchor.y * obj.height;
@@ -199,28 +203,29 @@ class Application {
     bottom = Math.max(y1, y2) + nextY;
   
   
+   
     // --- HIT TEST
     if (x >= left && x <= right && y >= top && y <= bottom) {
+      // console.log(obj.title, ": ", obj.events);   
       
-
       for (const e of obj.events) {
-        console.log("OBJ", e.type )
-        if (e.type === event.type) {
-          e.callback(event);
-        }
+        // console.log("OBJ", e.type, " === ", event.type)
+        // if (e.type === event.type) {
+        //   e.callback(event);
+        // }
       }
     
       // propagation как у тебя
-      if (!obj.propagation) {
-        this.propagation = false;
-        return;
-      }
+      // if (!obj.propagation) {
+      //   this.propagation = false;
+      //   return;
+      // }
     }
   
     // --- children
     for (const child of obj.children.toReversed()) {
   
-      this.findObject(event, x, y, child, {
+      this.findObject(nextPropagation, event, x, y, child, {
         x: nextX,
         y: nextY,
         sx,
@@ -256,6 +261,7 @@ class Application {
 
 class Container {
   constructor(){
+    this.title = null;
     this.width = 0;
     this.height = 0;
     this.rotation = 0;
@@ -289,6 +295,8 @@ class Container {
 
   on(type, callback){
     this.events.push({ type, callback });
+    console.log(this.events);
+
   }
   
   
@@ -318,20 +326,23 @@ class Sprite extends Container{
 let player, playerBox = null;
 let app = null;
 
-async function startGame(param) {
+async function startGame() {
   app = new Application();
   await app.loadAll(["crab7.png", "tiles_03.png", "flip3.png"])
   
   const camera = new Container();
+  camera.title = "camera";
   camera.setPosition(0, 0);
   camera.setScale(1, 1);
   camera.setAnchor(0, 0);
   
   world = new Container();
+  world.title = "world";
   camera.addChild(world);
   app.addChild(camera);
 
   const s = new Sprite(app.assets["flip3.png"]);
+  s.title = "s";
   s.zIndex = 2;
   s.setPosition(0,0);
   
@@ -341,6 +352,7 @@ async function startGame(param) {
 
 
   const s1 = new Sprite(app.assets["tiles_03.png"]);
+  s1.title = "s1";
   s1.zIndex = 3;
   s1.setPosition(0, 0);
   s1.width = 100;
@@ -356,18 +368,23 @@ async function startGame(param) {
   
   // playerBox = new Container();
   playerBox = new Sprite(app.assets["tiles_03.png"]);
-
+  playerBox.title = "playerBox";
   playerBox.zIndex = 30;
   playerBox.setPosition(200, 200);
   playerBox.width = 100;
   playerBox.height = 100;
   playerBox.setAnchor(0, 0)
   playerBox.setScale(1, 1);
+  playerBox.on("touchstart",(e) => {
+    //playerBox.position.x++;
+    console.log("playerBox touchstart")
+  })
   
 
   playerBox.stopPropagation();
 
   player = new Sprite(app.assets["crab7.png"]);
+  player.title = "player";
   player.width = 100;
   player.height = 100;
   player.setPosition(50, 50);
@@ -381,23 +398,20 @@ async function startGame(param) {
   //   //playerBox.position.x++;
   //   console.log("playerBox")
   // })
-  playerBox.on("touchstart",(e) => {
-    //playerBox.position.x++;
-    console.log("playerBox touchstart")
-  })
-  playerBox.on("touchmove",(e) => {
-    //playerBox.position.x++;
-    console.log("playerBox touchmove")
-  })
-  playerBox.on("touchend",(e) => {
-    //playerBox.position.x++;
-    console.log("playerBox touchend")
-  })
   
-  player.on("click",(e) => {
-    //playerBox.position.x++;
-    console.log("player")
-  })
+  // playerBox.on("touchmove",(e) => {
+  //   //playerBox.position.x++;
+  //   console.log("playerBox touchmove")
+  // })
+  // playerBox.on("touchend",(e) => {
+  //   //playerBox.position.x++;
+  //   console.log("playerBox touchend")
+  // })
+  
+  // player.on("click",(e) => {
+  //   //playerBox.position.x++;
+  //   console.log("player")
+  // })
   
   
   playerBox.addChild(player);
