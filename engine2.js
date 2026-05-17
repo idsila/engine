@@ -16,6 +16,20 @@ class Application {
     this.events = {};
     
     this.propagation = true;
+    
+    this.input = {
+      x: 0,
+      y: 0,
+
+      down: false,
+      pressed: false,
+      released: false,
+
+      hovered: null,
+      focused: null,
+
+      touches: []
+    }
   
     this.#initApp();
     
@@ -37,23 +51,48 @@ class Application {
     } 
 
     
-    this.addEvent("click", "main", (event) => {
-      this.find(event, event.clientX, event.clientY);
-    });
-    this.addEvent("touchstart", "main", (event) => {
-      // this.findEvent(event);
-      this.find(event, event.clientX, event.clientY);
-    });
-    // this.addEvent("touchmove", "main", (event) => {
-    //   // this.findEvent(event);
-    //   this.find(event, event.clientX, event.clientY);
-    // });
-    this.addEvent("touchend", "main", (event) => {
-      // this.findEvent(event);
-      this.find(event, event.clientX, event.clientY);
-    });
-
+    this.initInputEvents();
   }
+  
+  initInputEvents() {
+  
+  // Палец / мышь двигается
+  this.canvas.addEventListener("pointermove", (e) => {
+    
+    this.input.x = e.clientX;
+    this.input.y = e.clientY;
+    
+  });
+  
+  
+  // Нажатие
+  this.canvas.addEventListener("pointerdown", (e) => {
+    
+    this.input.x = e.clientX;
+    this.input.y = e.clientY;
+    
+    this.input.down = true;
+    
+    // pressed = только 1 кадр
+    this.input.pressed = true;
+    
+  });
+  
+  
+  // Отжатие
+  this.canvas.addEventListener("pointerup", (e) => {
+    
+    this.input.x = e.clientX;
+    this.input.y = e.clientY;
+    
+    this.input.down = false;
+    
+    // released = только 1 кадр
+    this.input.released = true;
+    
+  });
+  
+}
   
   resize() {
     this.dpr = window.devicePixelRatio || 1;
@@ -93,6 +132,7 @@ class Application {
   startLoop(update) {
     const loop = () => {
       this.clear();
+      this.updateInput()
       update();
       this.render();
       this.tickers.forEach(fn => fn())
@@ -157,18 +197,242 @@ class Application {
     ctx.restore();
   }
   
-  // Поиск элемента на который я нажал
-  find(event, x = 0, y = 0){
-    let propagation = true;
+  // updateInput
+  updateInput() {
+    // Ищем объект под курсором
+    const hovered = this.findTopObject(this.input.x, this.input.y);
+  
+  
+    // =========================================
+    // HOVER SYSTEM
+    // =========================================
+  
+    // Если объект под курсором изменился
+    if (hovered !== this.input.hovered) {
+    
+      // Старый объект покинут
+      if (this.input.hovered) {
+      
+        this.dispatchEvent(this.input.hovered, "pointerleave");
+      
+      }
+    
+      // Новый объект наведен
+      if (hovered) {
+      
+        this.dispatchEvent(hovered, "pointerenter");
+      
+      }
+    
+      this.input.hovered = hovered;
+    }
+  
+  
+    // =========================================
+    // POINTER MOVE
+    // =========================================
+  
+    if (hovered) {
+    
+      this.dispatchEvent(hovered, "pointermove");
+    
+    }
+  
+  
+    // =========================================
+    // POINTER DOWN
+    // =========================================
+  
+    if (this.input.pressed) {
+    
+      if (hovered) {
+      
+        // Запоминаем кто был нажат
+        this.input.target = hovered;
+      
+        this.dispatchEvent(hovered, "pointerdown");
+      
+      }
+    
+    }
+  
+  
+    // =========================================
+    // POINTER UP
+    // =========================================
+  
+    if (this.input.released) {
+    
+      if (this.input.target) {
+      
+        this.dispatchEvent(this.input.target, "pointerup");
+      
+      
+        // CLICK
+        // Если нажали и отпустили на одном объекте
+        if (hovered === this.input.target) {
+          this.dispatchEvent( hovered, "click");
+        }
+      
+      }
+    
+      this.input.target = null;
+    
+    }
+  
+  
+    // =========================================
+    // RESET FRAME FLAGS
+    // =========================================
+  
+    this.input.pressed = false;
+    this.input.released = false;
+  
+  }
+
+
+  findTopObject(x, y) {
+    // reverse потому что верхние объекты
+    // обычно последние в массиве
+  
     for (const obj of this.stage.children.toReversed()) {
-      this.findObject(propagation, event, x, y, obj);
+      const found = this.findObject(x, y, obj);
+      if (found) {
+        return found;
+      }
+    }
+  
+    return null;
+  }
+
+  findObject(x, y, obj, t = { x: 0, y: 0, sx: 1, sy: 1 }) {
+  
+  // =========================================
+  // WORLD TRANSFORM
+  // =========================================
+  
+  const ax = obj.anchor.x * obj.width;
+  const ay = obj.anchor.y * obj.height;
+  
+  const sx = t.sx * obj.scale.x;
+  const sy = t.sy * obj.scale.y;
+  
+  const nextX =
+    t.x +
+    (obj.position.x - ax * obj.scale.x) * t.sx;
+  
+  const nextY =
+    t.y +
+    (obj.position.y - ay * obj.scale.y) * t.sy;
+  
+  
+  // =========================================
+  // CHILDREN FIRST
+  // =========================================
+  
+  // Сначала проверяем детей
+  // потому что они визуально сверху
+  
+  for (const child of obj.children.toReversed()) {
+    
+    const found = this.findObject(
+      x,
+      y,
+      child,
+      {
+        x: nextX,
+        y: nextY,
+        sx,
+        sy
+      }
+    );
+    
+    if (found) {
+      return found;
+    }
+    
+  }
+  
+  
+  // =========================================
+  // HIT TEST
+  // =========================================
+  
+  let left = nextX;
+  let top = nextY;
+  
+  let right = nextX + obj.width * sx;
+  let bottom = nextY + obj.height * sy;
+  
+  
+  // negative scale support
+  
+  if (left > right) {
+    [left, right] = [right, left];
+  }
+  
+  if (top > bottom) {
+    [top, bottom] = [bottom, top];
+  }
+  
+  
+  // =========================================
+  // OBJECT FOUND
+  // =========================================
+  
+  if (
+    x >= left &&
+    x <= right &&
+    y >= top &&
+    y <= bottom
+  ) {
+    
+    return obj;
+    
+  }
+  
+  return null;
+}
+
+  dispatchEvent(target, type) {
+    const event = {
+      type,
+      target,
+      stopped: false,
+      stopPropagation() {
+        this.stopped = true;
+      }
+    };
+  
+  
+    let current = target;
+    
+    // bubbling вверх по дереву
+    while (current) {
+    
+      current.emit(type, event);
+      if (event.stopped) {
+        break;
+      }
+      current = current.parent;
     }
   }
-  findObject(propagation, event, x, y, obj, t = { x: 0, y: 0, sx: 1, sy: 1 }) {
-    let nextPropagation = propagation;
-    if (!nextPropagation) return;
+  
+  
+  
+  
+  
+  // Поиск элемента на который я нажал
+  findOld(event, x = 0, y = 0){
+    this.propagation = true;
+    for (const obj of this.stage.children.toReversed()) {
+      this.findObject(event, x, y, obj);
+    }
+  }
+  findObjectOld(event, x, y, obj, t = { x: 0, y: 0, sx: 1, sy: 1 }) {
+    if (!this.propagation) return;
     // console.log(event.type)
-    console.log("event" ,  event.clientX, event.touches)
+    //console.log("event" ,  event.clientX, event.touches)
 
 
     // --- anchor в local
@@ -210,22 +474,22 @@ class Application {
       
       for (const e of obj.events) {
         // console.log("OBJ", e.type, " === ", event.type)
-        // if (e.type === event.type) {
-        //   e.callback(event);
-        // }
+        if (e.type === event.type) {
+           e.callback(event);
+        }
       }
     
       // propagation как у тебя
-      // if (!obj.propagation) {
-      //   this.propagation = false;
-      //   return;
-      // }
+       if (!obj.propagation) {
+         this.propagation = false;
+         return;
+      }
     }
   
     // --- children
     for (const child of obj.children.toReversed()) {
   
-      this.findObject(nextPropagation, event, x, y, child, {
+      this.findObject(event, x, y, child, {
         x: nextX,
         y: nextY,
         sx,
@@ -270,7 +534,7 @@ class Container {
     this.position = { x: 0, y: 0 };
     this.anchor = { x: 0, y: 0 };
     this.zIndex = 1;
-    this.events = [];
+    this.events = new Map();
     this.children = [];
     this.stage = {};
     return this;
@@ -293,19 +557,33 @@ class Container {
     this.propagation = false;
   }
 
-  on(type, callback){
-    this.events.push({ type, callback });
-    console.log(this.events);
-
+  on(type, callback) {
+    if (!this.events.has(type)) {
+      this.events.set(type, []);
+    }
+    this.events.get(type).push(callback);
   }
+  
+  emit(type, event) {
+    const listeners = this.events.get(type);
+    if (!listeners) return;
+    for (const callback of listeners) {
+      callback(event);
+    }
+  }
+
   
   
   addChild(entity) {
+    entity.parent = this;
     this.children.push(entity);
     this.children.sort((a, b) => {
       return a.zIndex - b.zIndex;
     });
   }
+  
+  
+  
 }
 
 
@@ -358,9 +636,9 @@ async function startGame() {
   s1.width = 100;
   s1.height = 100;
   
-  s1.on("click",(e) => {
+  s1.on("pointerenter",(e) => {
     //playerBox.position.x++;
-    console.log("sprite1")
+    console.log("pointerenter: sprite1")
   })
   
   world.addChild(s1);
@@ -370,15 +648,12 @@ async function startGame() {
   playerBox = new Sprite(app.assets["tiles_03.png"]);
   playerBox.title = "playerBox";
   playerBox.zIndex = 30;
-  playerBox.setPosition(200, 200);
+  playerBox.setPosition(100, 100);
   playerBox.width = 100;
   playerBox.height = 100;
   playerBox.setAnchor(0, 0)
   playerBox.setScale(1, 1);
-  playerBox.on("touchstart",(e) => {
-    //playerBox.position.x++;
-    console.log("playerBox touchstart")
-  })
+  
   
 
   playerBox.stopPropagation();
@@ -390,28 +665,19 @@ async function startGame() {
   player.setPosition(50, 50);
   player.setAnchor(0.5, 0.5)
   player.setScale(1, 1);
-  player.stopPropagation();
+  //player.stopPropagation();
   
   // player.setAnchor(0.5, 0.5)
   //player.setScale(-1, 1);
-  // playerBox.on("click",(e) => {
-  //   //playerBox.position.x++;
-  //   console.log("playerBox")
-  // })
+  playerBox.on("click",(e) => {
+    console.log("click: playerBox ")
+  })
   
-  // playerBox.on("touchmove",(e) => {
-  //   //playerBox.position.x++;
-  //   console.log("playerBox touchmove")
-  // })
-  // playerBox.on("touchend",(e) => {
-  //   //playerBox.position.x++;
-  //   console.log("playerBox touchend")
-  // })
   
-  // player.on("click",(e) => {
+  player.on("click",(e) => {
   //   //playerBox.position.x++;
-  //   console.log("player")
-  // })
+     console.log("click: player")
+  })
   
   
   playerBox.addChild(player);
