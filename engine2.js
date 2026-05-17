@@ -64,43 +64,36 @@ class Application {
   
   initInputEvents() {
   
-  // Палец / мышь двигается
-  this.canvas.addEventListener("pointermove", (e) => {
-    
-    this.input.x = e.clientX;
-    this.input.y = e.clientY;
-    
-  });
+    // Палец / мышь двигается
+    this.canvas.addEventListener("pointermove", (e) => {
+      this.input.x = e.clientX;
+      this.input.y = e.clientY;
+    });
   
   
-  // Нажатие
-  this.canvas.addEventListener("pointerdown", (e) => {
-    
-    this.input.x = e.clientX;
-    this.input.y = e.clientY;
-    
-    this.input.down = true;
-    
-    // pressed = только 1 кадр
-    this.input.pressed = true;
-    
-  });
+    // Нажатие
+    this.canvas.addEventListener("pointerdown", (e) => {
+      this.input.x = e.clientX;
+      this.input.y = e.clientY;
+
+      this.input.down = true;    
+      // pressed = только 1 кадр
+      this.input.pressed = true;
+    });
   
   
-  // Отжатие
-  this.canvas.addEventListener("pointerup", (e) => {
+    // Отжатие
+    this.canvas.addEventListener("pointerup", (e) => {
+      this.input.x = e.clientX;
+      this.input.y = e.clientY;
     
-    this.input.x = e.clientX;
-    this.input.y = e.clientY;
-    
-    this.input.down = false;
-    
-    // released = только 1 кадр
-    this.input.released = true;
-    
-  });
+      this.input.down = false;
+
+      // released = только 1 кадр
+      this.input.released = true;    
+    });
   
-}
+  }
   
   resize() {
     this.dpr = window.devicePixelRatio || 1;
@@ -125,19 +118,34 @@ class Application {
   }
   
   screenToWorld(x, y) {
-  return {
-    x: x / this.camera.scale.x + this.camera.position.x,
-    y: y / this.camera.scale.y + this.camera.position.y
-  };
-}
+    const rect = this.canvas.getBoundingClientRect();
+  
+    const sx = (x - rect.left);
+    const sy = (y - rect.top);
+  
+    return {
+      x: sx / this.camera.scale.x + this.camera.position.x,
+      y: sy / this.camera.scale.y + this.camera.position.y
+    };
+  }
   
   follow(target, smooth = 0.1) {
-  const tx = target.world.x - this.width / 2;
-  const ty = target.world.y - this.height / 2;
+
+    const ax = target.anchor.x * target.width;
+    const ay = target.anchor.y * target.height;
   
-  this.camera.position.x += (tx - this.camera.position.x) * smooth;
-  this.camera.position.y += (ty - this.camera.position.y) * smooth;
-}
+    const targetX = target.world.x - ax * target.world.scaleX;
+    const targetY = target.world.y - ay * target.world.scaleY;
+  
+    const tx = targetX + (target.width * target.world.scaleX) / 2;
+    const ty = targetY + (target.height * target.world.scaleY) / 2;
+  
+    const cx = this.width / 2;
+    const cy = this.height / 2;
+  
+    this.camera.position.x += (tx - cx - this.camera.position.x) * smooth;
+    this.camera.position.y += (ty - cy - this.camera.position.y) * smooth;
+  }
   
   // Загрузка Изображений 
   async loadImage(path) {
@@ -165,19 +173,16 @@ class Application {
   startLoop(update) {
     let last = performance.now();
     const loop = (now) => {
-      
       const delta = (now - last) / 1000;
       last = now;
-      
       this.delta = delta
-      
       this.clear();
-      
       update(delta);
+      this.tickers.forEach(fn => fn())
       this.updateTransforms(this.stage);
       this.updateInput();
+      
       this.render();
-      this.tickers.forEach(fn => fn())
       requestAnimationFrame(loop);
     };
     loop();
@@ -192,21 +197,7 @@ class Application {
   }
   
   
-  // Добавление и удаление эвентов 
-  addEvent(type, name, callback){
-    const path = `${type}/${name}`;
-    if(this.events[path]) return;
-    const bound = callback.bind(this);
-    this.events[path] = bound;
-    this.canvas.addEventListener(type, bound);
-  }
-  removeEvent(type, name) {
-    const path = `${type}/${name}`;
-    const callback = this.events[path];
-    if (!callback) return;
-    this.canvas.removeEventListener(type, callback);
-    delete this.events[path];
-  }
+  
   
   
   
@@ -215,44 +206,53 @@ class Application {
     this.stage.addChild(entity);
   }
   render() {
-  const cam = this.camera;
+    const cam = this.camera;
   
-  // 1. WORLD PASS (с камерой)
-  this.ctx.save();
-  this.ctx.scale(cam.scale.x, cam.scale.y);
-  this.ctx.translate(-cam.position.x, -cam.position.y);
+    // 1. WORLD PASS (с камерой)
+    this.ctx.save();
+    this.ctx.scale(cam.scale.x, cam.scale.y);
+    this.ctx.translate(-cam.position.x, -cam.position.y);
   
-  this.renderObject(this.place);
+    this.renderObject(this.place);
   
-  this.ctx.restore();
+    this.ctx.restore();
   
-  // 2. UI PASS (без камеры)
-  this.ctx.save();
-  this.renderObject(this.ui);
-  this.ctx.restore();
-}
+    // 2. UI PASS (без камеры)
+    this.ctx.save();
+    this.renderObject(this.ui);
+    this.ctx.restore();
+  }
   renderObject(obj) {
-  const ctx = this.ctx;
+    const ctx = this.ctx;
   
-  if (obj.resource) {
-    ctx.drawImage(
-  obj.resource,
-  obj.frame.x,
-  obj.frame.y,
-  obj.frame.width,
-  obj.frame.height,
+    if (obj.resource) {
+      ctx.save();
+
+      ctx.translate(obj.world.x, obj.world.y);
+      
+      // flip handling
+      ctx.scale(obj.world.scaleX, obj.world.scaleY);
+      
+      ctx.drawImage(
+        obj.resource,
+        obj.frame.x,
+        obj.frame.y,
+        obj.frame.width,
+        obj.frame.height,
+      
+        0,
+        0,
+        obj.width,
+        obj.height
+      );
+      
+      ctx.restore();
+    }
   
-  obj.world.x,
-  obj.world.y,
-  obj.width * obj.world.scaleX,
-  obj.height * obj.world.scaleY
-);
+    for (const child of obj.children) {
+      this.renderObject(child);
+    }
   }
-  
-  for (const child of obj.children) {
-    this.renderObject(child);
-  }
-}
   
   // updateInput
   updateInput() {
@@ -362,58 +362,46 @@ class Application {
   }
 
   findObject(x, y, obj) {
-  
-  for (const child of obj.children.toReversed()) {
-    
-    const found =
-      this.findObject(x, y, child);
-    
-    if (found) {
-      return found;
+    for (const child of obj.children.toReversed()) {
+      const found = this.findObject(x, y, child);
+      if (found) {
+        return found;
+      }
     }
-    
+    if (this.hitTest(obj, x, y)) {
+      return obj;
+    }
+    return null;
   }
-  
-  
-  if (this.hitTest(obj, x, y)) {
-    return obj;
-  }
-  
-  return null;
-}
   
   
   hitTest(obj, x, y) {
   
-  let left = obj.world.x;
-  let top = obj.world.y;
+    let left = obj.world.x;
+    let top = obj.world.y;
   
-  let right =
-    left +
-    obj.width * obj.world.scaleX;
+    let right = left + obj.width * obj.world.scaleX;
   
-  let bottom =
-    top +
-    obj.height * obj.world.scaleY;
+    let bottom = top + obj.height * obj.world.scaleY;
   
   
-  if (left > right) {
-    [left, right] = [right, left];
+    if (left > right) {
+      [left, right] = [right, left];
+    }
+  
+    if (top > bottom) {
+      [top, bottom] = [bottom, top];
+    }
+  
+  
+    return (
+      x >= left &&
+      x <= right &&
+      y >= top &&
+      y <= bottom
+    );
+  
   }
-  
-  if (top > bottom) {
-    [top, bottom] = [bottom, top];
-  }
-  
-  
-  return (
-    x >= left &&
-    x <= right &&
-    y >= top &&
-    y <= bottom
-  );
-  
-}
 
 
   dispatchEvent(target, type) {
@@ -443,75 +431,53 @@ class Application {
   }
   
   // updTrans
-  updateTransforms(
-  obj,
-  parent = {
-    x: 0,
-    y: 0,
-    scaleX: 1,
-    scaleY: 1
-  }
-) {
+  updateTransforms(obj, parent = { x: 0, y: 0, scaleX: 1, scaleY: 1 }) {
   
-  // =====================================
-  // LOCAL
-  // =====================================
+    // =====================================
+    // LOCAL
+    // =====================================
   
-  const ax = obj.anchor.x * obj.width;
-  const ay = obj.anchor.y * obj.height;
+    const ax = obj.anchor.x * obj.width;
+    const ay = obj.anchor.y * obj.height;
   
   
-  // =====================================
-  // WORLD SCALE
-  // =====================================
+    // =====================================
+    // WORLD SCALE
+    // =====================================
   
-  obj.world.scaleX =
-    parent.scaleX * obj.scale.x;
+    obj.world.scaleX = parent.scaleX * obj.scale.x;
   
-  obj.world.scaleY =
-    parent.scaleY * obj.scale.y;
+    obj.world.scaleY = parent.scaleY * obj.scale.y;
   
   
-  // =====================================
-  // WORLD POSITION
-  // =====================================
+    // =====================================
+    // WORLD POSITION
+    // =====================================
   
-  obj.world.x =
-    parent.x +
-    (
-      obj.position.x -
-      ax * obj.scale.x
-    ) * parent.scaleX;
+    obj.world.x = parent.x + (obj.position.x - ax * obj.scale.x) * parent.scaleX;
+    obj.world.y = parent.y + (obj.position.y - ay * obj.scale.y) * parent.scaleY;
   
   
-  obj.world.y =
-    parent.y +
-    (
-      obj.position.y -
-      ay * obj.scale.y
-    ) * parent.scaleY;
+    // =====================================
+    // CHILDREN
+    // =====================================
   
-  
-  // =====================================
-  // CHILDREN
-  // =====================================
-  
-  for (const child of obj.children) {
+    for (const child of obj.children) {
     
-    this.updateTransforms(
-      child,
-      {
-        x: obj.world.x,
-        y: obj.world.y,
+      this.updateTransforms(
+        child,
+        {
+          x: obj.world.x,
+          y: obj.world.y,
         
-        scaleX: obj.world.scaleX,
-        scaleY: obj.world.scaleY
-      }
-    );
+          scaleX: obj.world.scaleX,
+          scaleY: obj.world.scaleY
+        }
+      );
     
-  }
+    }
   
-}
+  }
   
   
 
@@ -726,7 +692,7 @@ async function startGame() {
   //player.stopPropagation();
   
   // player.setAnchor(0.5, 0.5)
-  //player.setScale(-1, 1);
+  // player.setScale(-1, 1);
   playerBox.on("click",(e) => {
     e.stopPropagation();
 
@@ -747,7 +713,7 @@ async function startGame() {
 
   app.ticker.add(() => {
     app.follow(playerBox, 0.1);
-    console.log('j')
+    //console.log('j')
   })
 
 
