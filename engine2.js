@@ -43,16 +43,13 @@ class Application {
     this.resize();
     window.addEventListener("resize", () => {  this.resize() });
     
-    this.camera = new Container();
-    this.camera.title = "camera";
-    this.camera.setPosition(0, 0);
-    this.camera.setScale(1, 1);
-    this.camera.setAnchor(0, 0);
+    this.camera = { position:{x:0,y:0}, scale:{x:1,y:1} }  
     
     this.place = new Container();
-    this.place.title = "world";
-    this.camera.addChild(this.place);
-    this.stage.addChild(this.camera);
+    this.stage.addChild(this.place);
+    
+    this.ui = new Container();
+    this.stage.addChild(this.ui);
     
     
     this.ticker = {
@@ -117,6 +114,31 @@ class Application {
     this.ctx.imageSmoothingEnabled = false;
   }
   
+  
+  getCameraTransform() {
+    return {
+      x: this.camera.position.x,
+      y: this.camera.position.y,
+      scaleX: this.camera.scale.x,
+      scaleY: this.camera.scale.y
+    };
+  }
+  
+  screenToWorld(x, y) {
+  return {
+    x: x / this.camera.scale.x + this.camera.position.x,
+    y: y / this.camera.scale.y + this.camera.position.y
+  };
+}
+  
+  follow(target, smooth = 0.1) {
+  const tx = target.world.x - this.width / 2;
+  const ty = target.world.y - this.height / 2;
+  
+  this.camera.position.x += (tx - this.camera.position.x) * smooth;
+  this.camera.position.y += (ty - this.camera.position.y) * smooth;
+}
+  
   // Загрузка Изображений 
   async loadImage(path) {
     return new Promise((resolve, reject) => {
@@ -141,10 +163,19 @@ class Application {
   
   // Цикл для жизни приложения и отрисовки
   startLoop(update) {
-    const loop = () => {
+    let last = performance.now();
+    const loop = (now) => {
+      
+      const delta = (now - last) / 1000;
+      last = now;
+      
+      this.delta = delta
+      
       this.clear();
-      this.updateInput()
-      update();
+      
+      update(delta);
+      this.updateTransforms(this.stage);
+      this.updateInput();
       this.render();
       this.tickers.forEach(fn => fn())
       requestAnimationFrame(loop);
@@ -183,37 +214,51 @@ class Application {
   addChild(entity) {
     this.stage.addChild(entity);
   }
-  render(){
-    this.quantityStage = 0;
-    this.renderObject(this.stage);
-  }
+  render() {
+  const cam = this.camera;
+  
+  // 1. WORLD PASS (с камерой)
+  this.ctx.save();
+  this.ctx.scale(cam.scale.x, cam.scale.y);
+  this.ctx.translate(-cam.position.x, -cam.position.y);
+  
+  this.renderObject(this.place);
+  
+  this.ctx.restore();
+  
+  // 2. UI PASS (без камеры)
+  this.ctx.save();
+  this.renderObject(this.ui);
+  this.ctx.restore();
+}
   renderObject(obj) {
-    const ctx = this.ctx;
-    ctx.save();
+  const ctx = this.ctx;
   
-    const ax = obj.width * obj.anchor.x;
-    const ay = obj.height * obj.anchor.y;
+  if (obj.resource) {
+    ctx.drawImage(
+  obj.resource,
+  obj.frame.x,
+  obj.frame.y,
+  obj.frame.width,
+  obj.frame.height,
   
-    ctx.translate(obj.position.x - ax * obj.scale.x, obj.position.y - ay * obj.scale.y);
-    ctx.scale(obj.scale.x, obj.scale.y);
-
-    if (obj?.resource) {
-      ctx.drawImage(obj.resource, 0, 0, obj.width, obj.height);
-    }
-  
-    for (const child of obj.children) {
-      this.renderObject(child);
-    }
-  
-    ctx.restore();
+  obj.world.x,
+  obj.world.y,
+  obj.width * obj.world.scaleX,
+  obj.height * obj.world.scaleY
+);
   }
+  
+  for (const child of obj.children) {
+    this.renderObject(child);
+  }
+}
   
   // updateInput
   updateInput() {
     // Ищем объект под курсором
-    const hovered = this.findTopObject(this.input.x, this.input.y);
-  
-  
+    const world = this.screenToWorld(this.input.x, this.input.y);
+    const hovered = this.findTopObject(world.x, world.y);
     // =========================================
     // HOVER SYSTEM
     // =========================================
@@ -316,47 +361,12 @@ class Application {
     return null;
   }
 
-  findObject(x, y, obj, t = { x: 0, y: 0, sx: 1, sy: 1 }) {
-  
-  // =========================================
-  // WORLD TRANSFORM
-  // =========================================
-  
-  const ax = obj.anchor.x * obj.width;
-  const ay = obj.anchor.y * obj.height;
-  
-  const sx = t.sx * obj.scale.x;
-  const sy = t.sy * obj.scale.y;
-  
-  const nextX =
-    t.x +
-    (obj.position.x - ax * obj.scale.x) * t.sx;
-  
-  const nextY =
-    t.y +
-    (obj.position.y - ay * obj.scale.y) * t.sy;
-  
-  
-  // =========================================
-  // CHILDREN FIRST
-  // =========================================
-  
-  // Сначала проверяем детей
-  // потому что они визуально сверху
+  findObject(x, y, obj) {
   
   for (const child of obj.children.toReversed()) {
     
-    const found = this.findObject(
-      x,
-      y,
-      child,
-      {
-        x: nextX,
-        y: nextY,
-        sx,
-        sy
-      }
-    );
+    const found =
+      this.findObject(x, y, child);
     
     if (found) {
       return found;
@@ -365,18 +375,27 @@ class Application {
   }
   
   
-  // =========================================
-  // HIT TEST
-  // =========================================
+  if (this.hitTest(obj, x, y)) {
+    return obj;
+  }
   
-  let left = nextX;
-  let top = nextY;
-  
-  let right = nextX + obj.width * sx;
-  let bottom = nextY + obj.height * sy;
+  return null;
+}
   
   
-  // negative scale support
+  hitTest(obj, x, y) {
+  
+  let left = obj.world.x;
+  let top = obj.world.y;
+  
+  let right =
+    left +
+    obj.width * obj.world.scaleX;
+  
+  let bottom =
+    top +
+    obj.height * obj.world.scaleY;
+  
   
   if (left > right) {
     [left, right] = [right, left];
@@ -387,23 +406,15 @@ class Application {
   }
   
   
-  // =========================================
-  // OBJECT FOUND
-  // =========================================
-  
-  if (
+  return (
     x >= left &&
     x <= right &&
     y >= top &&
     y <= bottom
-  ) {
-    
-    return obj;
-    
-  }
+  );
   
-  return null;
 }
+
 
   dispatchEvent(target, type) {
     const event = {
@@ -431,7 +442,76 @@ class Application {
     }
   }
   
+  // updTrans
+  updateTransforms(
+  obj,
+  parent = {
+    x: 0,
+    y: 0,
+    scaleX: 1,
+    scaleY: 1
+  }
+) {
   
+  // =====================================
+  // LOCAL
+  // =====================================
+  
+  const ax = obj.anchor.x * obj.width;
+  const ay = obj.anchor.y * obj.height;
+  
+  
+  // =====================================
+  // WORLD SCALE
+  // =====================================
+  
+  obj.world.scaleX =
+    parent.scaleX * obj.scale.x;
+  
+  obj.world.scaleY =
+    parent.scaleY * obj.scale.y;
+  
+  
+  // =====================================
+  // WORLD POSITION
+  // =====================================
+  
+  obj.world.x =
+    parent.x +
+    (
+      obj.position.x -
+      ax * obj.scale.x
+    ) * parent.scaleX;
+  
+  
+  obj.world.y =
+    parent.y +
+    (
+      obj.position.y -
+      ay * obj.scale.y
+    ) * parent.scaleY;
+  
+  
+  // =====================================
+  // CHILDREN
+  // =====================================
+  
+  for (const child of obj.children) {
+    
+    this.updateTransforms(
+      child,
+      {
+        x: obj.world.x,
+        y: obj.world.y,
+        
+        scaleX: obj.world.scaleX,
+        scaleY: obj.world.scaleY
+      }
+    );
+    
+  }
+  
+}
   
   
 
@@ -461,8 +541,19 @@ class Container {
     this.anchor = { x: 0, y: 0 };
     this.zIndex = 1;
     this.events = new Map();
+    this.parent = null;
     this.children = [];
     this.stage = {};
+    
+    this.world = {
+      x: 0,
+      y: 0,
+      scaleX: 1,
+      scaleY: 1
+    };
+    
+    
+    
     return this;
   }
   
@@ -515,9 +606,70 @@ class Sprite extends Container{
   constructor(resource){
     super();
     this.resource = resource;
+    this.frame = {
+      x: 0,
+      y: 0,
+      width: resource ? resource.width : 0,
+      height: resource ? resource.height : 0
+    };
+    this.width = this.frame.width;
+    this.height = this.frame.height;
   }
+  setFrame(x, y, width, height) {
+    this.frame.x = x;
+    this.frame.y = y;
+    this.frame.width = width;
+    this.frame.height = height;
+  }
+  
 }
 
+
+
+class Tilemap extends Container {
+  
+  constructor(texture, tileSize = 16) {
+    super();
+    this.texture = texture;
+    this.tileSize = tileSize;
+    this.map = [];
+  }
+  setMap(map) {
+    this.map = map;
+    this.buildMap();
+  }
+  
+  buildMap() {
+    this.children = [];
+    for (let y = 0; y < this.map.length; y++) {
+    
+      for (let x = 0; x < this.map[y].length; x++) {
+      
+        const id = this.map[y][x];
+      
+        const tile = new Sprite(this.texture);
+      
+        tile.width = this.tileSize;
+        tile.height = this.tileSize;
+      
+        tile.setPosition(x * this.tileSize, y * this.tileSize );
+      
+        // FLOOR
+        if (id === 0) {
+          tile.setFrame(16*6, 0,16,16);
+        }
+      
+        // WALL
+        if (id === 1) {
+          tile.setFrame(0,16*4,16,16);
+        }
+      
+        this.addChild(tile);
+      }
+    }
+  }
+  
+}
 
 
 
@@ -530,41 +682,31 @@ let app = null;
 
 async function startGame() {
   app = new Application();
-  await app.loadAll(["crab7.png", "tiles_03.png", "flip3.png"])
+  await app.loadAll(["tiles_sewers.png","crab7.png", "tiles_03.png", "flip3.png"])
+  
+  const map = [
+    [1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 1],
+    [1, 0, 0, 0, 1],
+    [1, 1, 1, 1, 1]
+  ];
+  
+  const tilemap = new Tilemap(app.assets["tiles_sewers.png"],50);
+
+  tilemap.setMap(map);
+  app.place.addChild(tilemap);
   
   
-  
-  
-  const s = new Sprite(app.assets["flip3.png"]);
-  s.title = "s";
-  s.zIndex = 2;
-  s.setPosition(0,0);
-  
-  s.width = 100;
-  s.height = 100;
-  app.place.addChild(s);
 
 
-  const s1 = new Sprite(app.assets["tiles_03.png"]);
-  s1.title = "s1";
-  s1.zIndex = 3;
-  s1.setPosition(0, 0);
-  s1.width = 100;
-  s1.height = 100;
   
-  s1.on("pointerenter",(e) => {
-    //playerBox.position.x++;
-    console.log("pointerenter: sprite1")
-  })
-  
-  app.place.addChild(s1);
   
   
   // playerBox = new Container();
   playerBox = new Sprite(app.assets["tiles_03.png"]);
   playerBox.title = "playerBox";
   playerBox.zIndex = 30;
-  playerBox.setPosition(100, 100);
+  playerBox.setPosition(300, 300);
   playerBox.width = 100;
   playerBox.height = 100;
   playerBox.setAnchor(0, 0)
@@ -604,6 +746,8 @@ async function startGame() {
   app.place.addChild(playerBox);
 
   app.ticker.add(() => {
+    app.follow(playerBox, 0.1);
+    console.log('j')
   })
 
 
