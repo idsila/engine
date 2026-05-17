@@ -15,7 +15,6 @@ class Application {
     this.tickers = [];
     this.events = {};
     
-    this.propagation = true;
     
     this.input = {
       x: 0,
@@ -43,6 +42,18 @@ class Application {
     this.ctx = this.canvas.getContext("2d");
     this.resize();
     window.addEventListener("resize", () => {  this.resize() });
+    
+    this.camera = new Container();
+    this.camera.title = "camera";
+    this.camera.setPosition(0, 0);
+    this.camera.setScale(1, 1);
+    this.camera.setAnchor(0, 0);
+    
+    this.place = new Container();
+    this.place.title = "world";
+    this.camera.addChild(this.place);
+    this.stage.addChild(this.camera);
+    
     
     this.ticker = {
       add: (callback) =>{
@@ -398,6 +409,8 @@ class Application {
     const event = {
       type,
       target,
+      x: this.input.x,
+      y: this.input.y,
       stopped: false,
       stopPropagation() {
         this.stopped = true;
@@ -417,92 +430,6 @@ class Application {
       current = current.parent;
     }
   }
-  
-  
-  
-  
-  
-  // Поиск элемента на который я нажал
-  findOld(event, x = 0, y = 0){
-    this.propagation = true;
-    for (const obj of this.stage.children.toReversed()) {
-      this.findObject(event, x, y, obj);
-    }
-  }
-  findObjectOld(event, x, y, obj, t = { x: 0, y: 0, sx: 1, sy: 1 }) {
-    if (!this.propagation) return;
-    // console.log(event.type)
-    //console.log("event" ,  event.clientX, event.touches)
-
-
-    // --- anchor в local
-    const ax = obj.anchor.x * obj.width;
-    const ay = obj.anchor.y * obj.height;
-
-    // --- accumulate scale (как в render scale)
-    const sx = t.sx * obj.scale.x;
-    const sy = t.sy * obj.scale.y;
-
-    // --- world translate, строго как в renderObject (translate с anchor*scale)
-    const nextX = t.x + (obj.position.x - ax * obj.scale.x) * t.sx;
-    const nextY = t.y + (obj.position.y - ay * obj.scale.y) * t.sy;
-
-
-
-    // --- базовый rect в local space (как в renderObject: drawImage от 0,0)
-    let left = 0;
-    let top = 0;
-    let right = obj.width;
-    let bottom = obj.height;
-  
-    // --- scale transform rect (ВАЖНО: как canvas)
-    const x1 = left * sx;
-    const x2 = right * sx;
-    const y1 = top * sy;
-    const y2 = bottom * sy;
-  
-    left = Math.min(x1, x2) + nextX;
-    right = Math.max(x1, x2) + nextX;
-    top = Math.min(y1, y2) + nextY;
-    bottom = Math.max(y1, y2) + nextY;
-  
-  
-   
-    // --- HIT TEST
-    if (x >= left && x <= right && y >= top && y <= bottom) {
-      // console.log(obj.title, ": ", obj.events);   
-      
-      for (const e of obj.events) {
-        // console.log("OBJ", e.type, " === ", event.type)
-        if (e.type === event.type) {
-           e.callback(event);
-        }
-      }
-    
-      // propagation как у тебя
-       if (!obj.propagation) {
-         this.propagation = false;
-         return;
-      }
-    }
-  
-    // --- children
-    for (const child of obj.children.toReversed()) {
-  
-      this.findObject(event, x, y, child, {
-        x: nextX,
-        y: nextY,
-        sx,
-        sy
-      });
-    }
-  }
-
-  // event
-  findEvent(event){
-    console.log('event')
-  }
-  
   
   
   
@@ -529,7 +456,6 @@ class Container {
     this.width = 0;
     this.height = 0;
     this.rotation = 0;
-    this.propagation = true;
     this.scale = { x: 1, y: 1 };
     this.position = { x: 0, y: 0 };
     this.anchor = { x: 0, y: 0 };
@@ -553,9 +479,7 @@ class Container {
     this.anchor.x = x;
     this.anchor.y = y;
   }
-  stopPropagation(){
-    this.propagation = false;
-  }
+  
 
   on(type, callback) {
     if (!this.events.has(type)) {
@@ -608,17 +532,9 @@ async function startGame() {
   app = new Application();
   await app.loadAll(["crab7.png", "tiles_03.png", "flip3.png"])
   
-  const camera = new Container();
-  camera.title = "camera";
-  camera.setPosition(0, 0);
-  camera.setScale(1, 1);
-  camera.setAnchor(0, 0);
   
-  world = new Container();
-  world.title = "world";
-  camera.addChild(world);
-  app.addChild(camera);
-
+  
+  
   const s = new Sprite(app.assets["flip3.png"]);
   s.title = "s";
   s.zIndex = 2;
@@ -626,7 +542,7 @@ async function startGame() {
   
   s.width = 100;
   s.height = 100;
-  world.addChild(s);
+  app.place.addChild(s);
 
 
   const s1 = new Sprite(app.assets["tiles_03.png"]);
@@ -641,7 +557,7 @@ async function startGame() {
     console.log("pointerenter: sprite1")
   })
   
-  world.addChild(s1);
+  app.place.addChild(s1);
   
   
   // playerBox = new Container();
@@ -656,7 +572,7 @@ async function startGame() {
   
   
 
-  playerBox.stopPropagation();
+  //playerBox.stopPropagation();
 
   player = new Sprite(app.assets["crab7.png"]);
   player.title = "player";
@@ -670,18 +586,22 @@ async function startGame() {
   // player.setAnchor(0.5, 0.5)
   //player.setScale(-1, 1);
   playerBox.on("click",(e) => {
+    e.stopPropagation();
+
     console.log("click: playerBox ")
   })
   
   
   player.on("click",(e) => {
   //   //playerBox.position.x++;
+    //e.stopPropagation();
+
      console.log("click: player")
   })
   
   
   playerBox.addChild(player);
-  world.addChild(playerBox);
+  app.place.addChild(playerBox);
 
   app.ticker.add(() => {
   })
