@@ -46,9 +46,6 @@ class Application {
     this.resize();
     window.addEventListener("resize", () => {  this.resize() });
     
-    this.camera = { x: 0, y: 0, zoom: 1, mode: "free", target: null };
-    this.drag = { active: false, lastX: 0, lastY: 0 };
-    
     
     this.place = new Container();
     this.stage.addChild(this.place);
@@ -62,60 +59,64 @@ class Application {
         this.tickers.push(callback);
       }
     }
+
+    //Работа с камерой
+    this.camera = { x: 0, y: 0, zoom: 1, mode: "free", target: null };
+    this.drag = { active: false, lastX: 0, lastY: 0 };
     
     this.canvas.addEventListener("pointerdown", (e) => {
   
-  this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   
-  if (this.pointers.size === 1 && this.camera.mode === "free") {
-    this.drag.active = true;
-    this.drag.lastX = e.clientX;
-    this.drag.lastY = e.clientY;
-  }
-});
+      if (this.pointers.size === 1 && this.camera.mode === "free") {
+        this.drag.active = true;
+        this.drag.lastX = e.clientX;
+        this.drag.lastY = e.clientY;
+      }
+    });
 
 
     this.canvas.addEventListener("pointermove", (e) => {
   
-  if (this.pointers.has(e.pointerId)) {
-    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  }
+      if (this.pointers.has(e.pointerId)) {
+        this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
   
-  // DRAG (только free + 1 палец)
-  if (this.drag.active && this.pointers.size === 1) {
+      // DRAG (только free + 1 палец)
+      if (this.drag.active && this.pointers.size === 1) {
     
-    const dx = e.clientX - this.drag.lastX;
-    const dy = e.clientY - this.drag.lastY;
+        const dx = e.clientX - this.drag.lastX;
+        const dy = e.clientY - this.drag.lastY;
     
-    this.updateCameraDrag(dx, dy);
+        this.updateCameraDrag(dx, dy);
     
-    this.drag.lastX = e.clientX;
-    this.drag.lastY = e.clientY;
-  }
-});
+        this.drag.lastX = e.clientX;
+        this.drag.lastY = e.clientY;
+      }
+    });
 
     this.canvas.addEventListener("pointerup", (e) => {
   
-  this.pointers.delete(e.pointerId);
+      this.pointers.delete(e.pointerId);
   
-  if (this.pointers.size === 0) {
-    this.drag.active = false;
-  }
+      if (this.pointers.size === 0) {
+        this.drag.active = false;
+      }
   
-  if (this.pointers.size === 1) {
-    const p = [...this.pointers.values()][0];
-    this.drag.lastX = p.x;
-    this.drag.lastY = p.y;
+      if (this.pointers.size === 1) {
+        const p = [...this.pointers.values()][0];
+        this.drag.lastX = p.x;
+        this.drag.lastY = p.y;
     
-    if (this.camera.mode === "free") {
-      this.drag.active = true;
+        if (this.camera.mode === "free") {
+          this.drag.active = true;
+        }
     }
-  }
-  
-  if (this.pointers.size < 2) {
-    this.lastDistance = 0;
-  }
-});
+      
+      if (this.pointers.size < 2) {
+        this.lastDistance = 0;
+      }
+    });
     
 
     
@@ -133,25 +134,25 @@ class Application {
   }
   
   updateCameraFollow() {
-  if (this.camera.mode !== "follow" || !this.camera.target) return;
+    if (this.camera.mode !== "follow" || !this.camera.target) return;
   
-  const target = this.camera.target;
+    const target = this.camera.target;
   
-  const ax = target.anchor.x * target.width;
-  const ay = target.anchor.y * target.height;
+    const ax = target.anchor.x * target.width;
+    const ay = target.anchor.y * target.height;
   
-  const tx = target.world.x - ax * target.world.scaleX + (target.width * target.world.scaleX) / 2;
-  const ty = target.world.y - ay * target.world.scaleY + (target.height * target.world.scaleY) / 2;
+    const tx = target.world.x - ax * target.world.scaleX + (target.width * target.world.scaleX) / 2;
+    const ty = target.world.y - ay * target.world.scaleY + (target.height * target.world.scaleY) / 2;
   
-  const cx = this.width / (2 * this.camera.zoom);
-  const cy = this.height / (2 * this.camera.zoom);
+    const cx = this.width / (2 * this.camera.zoom);
+    const cy = this.height / (2 * this.camera.zoom);
   
-  const desiredX = tx - cx;
-  const desiredY = ty - cy;
+    const desiredX = tx - cx;
+    const desiredY = ty - cy;
   
-  this.camera.x += (desiredX - this.camera.x) * 0.1;
-  this.camera.y += (desiredY - this.camera.y) * 0.1;
-}
+    this.camera.x += (desiredX - this.camera.x) * 0.1;
+    this.camera.y += (desiredY - this.camera.y) * 0.1;
+  }
   updateCameraDrag(dx, dy) {
     if (this.camera.mode !== "free") return;
     this.camera.x -= dx / this.camera.zoom;
@@ -232,69 +233,71 @@ class Application {
   }
   
   screenToWorld(x, y) {
-  const rect = this.canvas.getBoundingClientRect();
+    const rect = this.canvas.getBoundingClientRect();
   
-  const sx = x - rect.left;
-  const sy = y - rect.top;
+    const sx = x - rect.left;
+    const sy = y - rect.top;
   
-  return {
-    x: sx / this.camera.zoom + this.camera.x,
-    y: sy / this.camera.zoom + this.camera.y
-  };
-}
+    return {
+      x: sx / this.camera.zoom + this.camera.x,
+      y: sy / this.camera.zoom + this.camera.y
+    };
+  }
   
   follow(target, smooth = 0.1) {
-  const tx = target.world.x - this.width / (2 * this.camera.zoom) + (target.width / 2);
-  const ty = target.world.y - this.height / (2 * this.camera.zoom) + (target.height / 2);
+    const tx = target.world.x - this.width / (2 * this.camera.zoom) + (target.width / 2);
+    const ty = target.world.y - this.height / (2 * this.camera.zoom) + (target.height / 2);
   
-  this.camera.x += (tx - this.camera.x) * smooth;
-  this.camera.y += (ty - this.camera.y) * smooth;
-}
+    this.camera.x += (tx - this.camera.x) * smooth;
+    this.camera.y += (ty - this.camera.y) * smooth;
+  }
   
   updatePinchZoom() {
-  if (this.pointers.size !== 2) {
-    this.lastDistance = 0;
-    return;
-  }
+    if (this.pointers.size !== 2) {
+      this.lastDistance = 0;
+      return;
+    }
   
-  const pts = [...this.pointers.values()];
-  const p1 = pts[0];
-  const p2 = pts[1];
+    const pts = [...this.pointers.values()];
+    const p1 = pts[0];
+    const p2 = pts[1];
   
-  const dx = p2.x - p1.x;
-  const dy = p2.y - p1.y;
-  const dist = Math.hypot(dx, dy);
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const dist = Math.hypot(dx, dy);
   
-  const centerX = (p1.x + p2.x) / 2;
-  const centerY = (p1.y + p2.y) / 2;
+    const centerX = (p1.x + p2.x) / 2;
+    const centerY = (p1.y + p2.y) / 2;
   
-  const rect = this.canvas.getBoundingClientRect();
+    const rect = this.canvas.getBoundingClientRect();
   
-  const sx = centerX - rect.left;
-  const sy = centerY - rect.top;
+    const sx = centerX - rect.left;
+    const sy = centerY - rect.top;
   
-  const worldBefore = this.screenToWorld(centerX, centerY);
+    const worldBefore = this.screenToWorld(centerX, centerY);
   
-  if (!this.lastDistance) {
+    if (!this.lastDistance) {
+      this.lastDistance = dist;
+      return;
+    }
+  
+    const scale = dist / this.lastDistance;
+  
+    this.camera.zoom *= scale;
+  
+    this.camera.zoom = Math.max(0.3, Math.min(5, this.camera.zoom));
+  
+    const worldAfter = this.screenToWorld(centerX, centerY);
+  
+    this.camera.x += worldBefore.x - worldAfter.x;
+    this.camera.y += worldBefore.y - worldAfter.y;
+  
     this.lastDistance = dist;
-    return;
   }
   
-  const scale = dist / this.lastDistance;
   
-  this.camera.zoom *= scale;
-  
-  this.camera.zoom = Math.max(0.3, Math.min(5, this.camera.zoom));
-  
-  const worldAfter = this.screenToWorld(centerX, centerY);
-  
-  this.camera.x += worldBefore.x - worldAfter.x;
-  this.camera.y += worldBefore.y - worldAfter.y;
-  
-  this.lastDistance = dist;
-}
-  
-  
+
+
   
   // Загрузка Изображений 
   async loadImage(path) {
