@@ -111,7 +111,7 @@ class Application {
         if (this.camera.mode === "free") {
           this.drag.active = true;
         }
-    }
+      }
       
       if (this.pointers.size < 2) {
         this.lastDistance = 0;
