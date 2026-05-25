@@ -16,25 +16,13 @@ class Application {
     this.events = {};
     
     
-    this.input = {
-      x: 0,
-      y: 0,
-
-      down: false,
-      pressed: false,
-      released: false,
-
-      hovered: null,
-      focused: null,
-
-      touches: []
-    }
+    this.input = { x: 0, y: 0, down: false, pressed: false, released: false, hovered: null, focused: null, touches: [] }
+    // Для камеры
     this.pointers = new Map();
     this.lastDistance = 0;
     
   
     this.#initApp();
-    
   }
   
   #initApp(){
@@ -60,6 +48,7 @@ class Application {
       }
     }
 
+    
     //Работа с камерой
     this.camera = { x: 0, y: 0, zoom: 1, mode: "free", target: null };
     this.drag = { active: false, lastX: 0, lastY: 0 };
@@ -105,6 +94,7 @@ class Application {
   
       if (this.pointers.size === 1) {
         const p = [...this.pointers.values()][0];
+
         this.drag.lastX = p.x;
         this.drag.lastY = p.y;
     
@@ -122,45 +112,17 @@ class Application {
     
     this.initInputEvents();
   }
-  
-  
-  setCameraMode(mode, target = null) {
-    this.camera.mode = mode;
-    this.camera.target = target;
-  
-    // сброс drag состояния при смене режима
-    this.drag.active = false;
-    this.lastDistance = 0;
+  resize() {
+    this.dpr = window.devicePixelRatio || 1;
+    this.width = window.innerWidth;
+    this.height = window.innerHeight;
+    this.canvas.style.width = this.width + "px";
+    this.canvas.style.height = this.height + "px";
+    this.canvas.width = this.width * this.dpr;
+    this.canvas.height = this.height * this.dpr;
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.imageSmoothingEnabled = false;
   }
-  
-  updateCameraFollow() {
-    if (this.camera.mode !== "follow" || !this.camera.target) return;
-  
-    const target = this.camera.target;
-  
-    const ax = target.anchor.x * target.width;
-    const ay = target.anchor.y * target.height;
-  
-    const tx = target.world.x - ax * target.world.scaleX + (target.width * target.world.scaleX) / 2;
-    const ty = target.world.y - ay * target.world.scaleY + (target.height * target.world.scaleY) / 2;
-  
-    const cx = this.width / (2 * this.camera.zoom);
-    const cy = this.height / (2 * this.camera.zoom);
-  
-    const desiredX = tx - cx;
-    const desiredY = ty - cy;
-  
-    this.camera.x += (desiredX - this.camera.x) * 0.1;
-    this.camera.y += (desiredY - this.camera.y) * 0.1;
-  }
-  updateCameraDrag(dx, dy) {
-    if (this.camera.mode !== "free") return;
-    this.camera.x -= dx / this.camera.zoom;
-    this.camera.y -= dy / this.camera.zoom;
-  }
-  
-  
-  
   initInputEvents() {
   
     // Палец / мышь двигается
@@ -210,48 +172,45 @@ class Application {
   
   }
   
-  resize() {
-    this.dpr = window.devicePixelRatio || 1;
-    this.width = window.innerWidth;
-    this.height = window.innerHeight;
-    this.canvas.style.width = this.width + "px";
-    this.canvas.style.height = this.height + "px";
-    this.canvas.width = this.width * this.dpr;
-    this.canvas.height = this.height * this.dpr;
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.ctx.imageSmoothingEnabled = false;
+  
+  updateCameraDrag(dx, dy) {
+    if (this.camera.mode !== "free") return;
+    this.camera.x -= dx / this.camera.zoom;
+    this.camera.y -= dy / this.camera.zoom;
   }
+
   
   
-  getCameraTransform() {
-    return {
-      x: this.camera.position.x,
-      y: this.camera.position.y,
-      scaleX: this.camera.scale.x,
-      scaleY: this.camera.scale.y
-    };
+  setCameraMode(mode, target = null) {
+    this.camera.mode = mode;
+    this.camera.target = target;
+  
+    // сброс drag состояния при смене режима
+    this.drag.active = false;
+    this.lastDistance = 0;
   }
+
+  updateCameraFollow() {
+    if (this.camera.mode !== "follow" || !this.camera.target) return;
   
-  screenToWorld(x, y) {
-    const rect = this.canvas.getBoundingClientRect();
+    const target = this.camera.target;
   
-    const sx = x - rect.left;
-    const sy = y - rect.top;
+    const ax = target.anchor.x * target.width;
+    const ay = target.anchor.y * target.height;
   
-    return {
-      x: sx / this.camera.zoom + this.camera.x,
-      y: sy / this.camera.zoom + this.camera.y
-    };
+    const tx = target.world.x - ax * target.world.scaleX + (target.width * target.world.scaleX) / 2;
+    const ty = target.world.y - ay * target.world.scaleY + (target.height * target.world.scaleY) / 2;
+  
+    const cx = this.width / (2 * this.camera.zoom);
+    const cy = this.height / (2 * this.camera.zoom);
+  
+    const desiredX = tx - cx;
+    const desiredY = ty - cy;
+  
+    this.camera.x += (desiredX - this.camera.x) * 0.1;
+    this.camera.y += (desiredY - this.camera.y) * 0.1;
   }
-  
-  follow(target, smooth = 0.1) {
-    const tx = target.world.x - this.width / (2 * this.camera.zoom) + (target.width / 2);
-    const ty = target.world.y - this.height / (2 * this.camera.zoom) + (target.height / 2);
-  
-    this.camera.x += (tx - this.camera.x) * smooth;
-    this.camera.y += (ty - this.camera.y) * smooth;
-  }
-  
+
   updatePinchZoom() {
     if (this.pointers.size !== 2) {
       this.lastDistance = 0;
@@ -294,6 +253,39 @@ class Application {
   
     this.lastDistance = dist;
   }
+  screenToWorld(x, y) {
+    const rect = this.canvas.getBoundingClientRect();
+  
+    const sx = x - rect.left;
+    const sy = y - rect.top;
+  
+    return {
+      x: sx / this.camera.zoom + this.camera.x,
+      y: sy / this.camera.zoom + this.camera.y
+    };
+  } 
+  
+
+
+
+  // Ниже функции которые ни где не задействованы, но могут пригодиться для разных режимов камеры
+  getCameraTransform() {
+    return {
+      x: this.camera.position.x,
+      y: this.camera.position.y,
+      scaleX: this.camera.scale.x,
+      scaleY: this.camera.scale.y
+    };
+  }
+
+  follow(target, smooth = 0.1) {
+    const tx = target.world.x - this.width / (2 * this.camera.zoom) + (target.width / 2);
+    const ty = target.world.y - this.height / (2 * this.camera.zoom) + (target.height / 2);
+  
+    this.camera.x += (tx - this.camera.x) * smooth;
+    this.camera.y += (ty - this.camera.y) * smooth;
+  }
+  // =========================================
   
   
 
@@ -333,6 +325,9 @@ class Application {
       this.tickers.forEach(fn => fn());
       if (this.camera.mode === "free") {
         this.updatePinchZoom();
+      }
+      if(this.camera.mode === "follow"){
+        this.updateCameraFollow();
       }
       this.updateTransforms(this.stage);
       this.updateInput();
