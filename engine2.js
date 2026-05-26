@@ -6,6 +6,7 @@ class Application {
     this.dpr = 1;
     this.width = 0;
     this.height = 0;
+    this.worldAlpha = 1;
   
     this.bgColor = "black";
     this.assets = {};
@@ -14,6 +15,13 @@ class Application {
   
     this.tickers = [];
     this.events = {};
+    this.world = {
+      x: 0,
+      y: 0,
+      scaleX: 1,
+      scaleY: 1,
+      alpha: 1
+    };
     
     
     this.input = { x: 0, y: 0, down: false, pressed: false, released: false, hovered: null, focused: null, touches: [] }
@@ -40,6 +48,9 @@ class Application {
     
     this.ui = new Container();
     this.stage.addChild(this.ui);
+
+    this.place.interactive = false;
+    this.ui.interactive = false;
     
     
     this.ticker = {
@@ -324,76 +335,103 @@ class Application {
   }
 
 
+
   render() {
-    const cam = this.camera;
-  
-    // 1. WORLD PASS (с камерой)
-    this.ctx.save();
-    this.ctx.scale(this.camera.zoom, this.camera.zoom);
-    this.ctx.translate(-this.camera.x, -this.camera.y);
-    this.renderObject(this.place);
-    this.ctx.restore();
-  
-    // 2. UI PASS (без камеры)
-    this.ctx.save();
-    this.renderObject(this.ui);
-    this.ctx.restore();
+    // WORLD
+    this.renderObject(this.place, true);
+    // UI
+    this.renderObject(this.ui, false);
   }
-  renderObject(obj) {
+  renderObject(obj, useCamera = true) {
+
+    if (!obj.visible) return;
+
     const ctx = this.ctx;
-  
-    if (obj.resource) {
-      ctx.save();
-      ctx.translate(obj.world.x, obj.world.y);
-      ctx.scale(obj.world.scaleX, obj.world.scaleY);
-      ctx.drawImage( obj.resource, obj.frame.x, obj.frame.y, obj.frame.width, obj.frame.height, 0, 0, obj.width, obj.height );
-      ctx.restore();
+
+    let x = obj.world.x;
+    let y = obj.world.y;
+    let scaleX = obj.world.scaleX;
+    let scaleY = obj.world.scaleY;
+
+    // Камера только для world
+    if (useCamera) {
+      x = (x - this.camera.x) * this.camera.zoom;
+      y = (y - this.camera.y) * this.camera.zoom;
+
+      scaleX *= this.camera.zoom;
+      scaleY *= this.camera.zoom;
     }
-  
+    ctx.save();
+    ctx.setTransform( scaleX * this.dpr, 0, 0, scaleY * this.dpr, x * this.dpr, y * this.dpr );
+    ctx.globalAlpha = obj.world.alpha;
+    if(obj.resource){
+      ctx.drawImage( obj.resource, obj.frame.x, obj.frame.y, obj.frame.width, obj.frame.height, 0, 0, obj.width, obj.height );
+    }
+    if (obj instanceof Text) {
+      ctx.fillStyle = obj.color;
+      ctx.font = `${obj.fontSize}px ${obj.fontFamily}`;
+      ctx.textAlign = obj.align;
+      ctx.textBaseline = "top";
+      ctx.fillText(obj.text, 0, 0);
+    }
+    ctx.restore();
+    
+
     for (const child of obj.children) {
-      this.renderObject(child);
+      this.renderObject(child, useCamera);
     }
   }
   
 
   updateInput() {
-    const world = this.screenToWorld(this.input.x, this.input.y);
-    const hovered = this.findTopObject(world.x, world.y);
-  
+    const screenX = this.input.x;
+    const screenY = this.input.y;
+
+    const world = this.screenToWorld(screenX, screenY);
+
+    let hovered = this.findObject(screenX, screenY, this.ui);
+
+    if (!hovered) {
+      hovered = this.findObject(world.x, world.y, this.place);
+    }
+
     if (hovered !== this.input.hovered) {
       if (this.input.hovered) {
         this.dispatchEvent(this.input.hovered, "pointerleave");
       }
+
       if (hovered) {
         this.dispatchEvent(hovered, "pointerenter");
       }
+
       this.input.hovered = hovered;
     }
 
     if (hovered) {
       this.dispatchEvent(hovered, "pointermove");
     }
-  
+
     if (this.input.pressed) {
       if (hovered) {
         this.input.target = hovered;
         this.dispatchEvent(hovered, "pointerdown");
       }
     }
-  
+
     if (this.input.released) {
       if (this.input.target) {
         this.dispatchEvent(this.input.target, "pointerup");
+
         if (hovered === this.input.target) {
-          this.dispatchEvent( hovered, "click");
+          this.dispatchEvent(hovered, "click");
         }
       }
+
       this.input.target = null;
     }
-  
+
     this.input.pressed = false;
     this.input.released = false;
-  
   }
 
 
@@ -408,13 +446,14 @@ class Application {
   }
 
   findObject(x, y, obj) {
+    if (!obj.visible) return null;
     for (const child of obj.children.toReversed()) {
       const found = this.findObject(x, y, child);
       if (found) {
         return found;
       }
     }
-    if (this.hitTest(obj, x, y)) {
+    if (obj.interactive && this.hitTest(obj, x, y)) {
       return obj;
     }
     return null;
@@ -462,18 +501,19 @@ class Application {
   }
   
   // updTrans
-  updateTransforms(obj, parent = { x: 0, y: 0, scaleX: 1, scaleY: 1 }) {
+  updateTransforms(obj, parent = { x: 0, y: 0, scaleX: 1, scaleY: 1, alpha: 1 }) {
     const ax = obj.anchor.x * obj.width;
     const ay = obj.anchor.y * obj.height;
   
     obj.world.scaleX = parent.scaleX * obj.scale.x;
     obj.world.scaleY = parent.scaleY * obj.scale.y;
+    obj.world.alpha = parent.alpha * obj.alpha;
     
     obj.world.x = parent.x + (obj.position.x - ax * obj.scale.x) * parent.scaleX;
     obj.world.y = parent.y + (obj.position.y - ay * obj.scale.y) * parent.scaleY;
   
     for (const child of obj.children) {
-      this.updateTransforms( child, { x: obj.world.x, y: obj.world.y, scaleX: obj.world.scaleX, scaleY: obj.world.scaleY });
+      this.updateTransforms( child, { x: obj.world.x, y: obj.world.y, scaleX: obj.world.scaleX, scaleY: obj.world.scaleY,alpha: obj.world.alpha });
     }
   }
   
@@ -496,7 +536,11 @@ class Application {
 
 class Container {
   constructor(){
+    this.destroyed = false;
+    this.visible = true;
+    this.interactive = true;
     this.title = null;
+    this.alpha = 1;
     this.width = 0;
     this.height = 0;
     this.rotation = 0;
@@ -542,6 +586,20 @@ class Container {
     }
     this.events.get(type).push(callback);
   }
+  off(type, callback) {
+    const listeners = this.events.get(type);
+
+    if (!listeners) return;
+    const index = listeners.indexOf(callback);
+
+    if (index !== -1) {
+      listeners.splice(index, 1);
+    }
+
+    if (listeners.length === 0) {
+      this.events.delete(type);
+    }
+  }
   
   emit(type, event) {
     const listeners = this.events.get(type);
@@ -560,9 +618,38 @@ class Container {
       return a.zIndex - b.zIndex;
     });
   }
+  removeChild(entity) {
+    const index = this.children.indexOf(entity);
+
+    if (index !== -1) {
+      entity.parent = null;
+      this.children.splice(index, 1);
+    }
+  }
+  destroy() {
+
+    if (this.destroyed) return;
+
+    this.destroyed = true;
+    this.visible = false;
+    this.interactive = false;
+
+    for (const child of [...this.children]) {
+      child.destroy();
+    }
+
+
+    this.events.clear();
+
+    if (this.parent) {
+      this.parent.removeChild(this);
+    }
+
+    this.parent = null;
+    //this.resource = null;
+  }
   
-  
-  
+
 }
 
 
@@ -585,8 +672,48 @@ class Sprite extends Container{
     this.frame.width = width;
     this.frame.height = height;
   }
+  destroy() {
+    super.destroy();
+  }
   
 }
+
+class Text extends Container {
+  constructor(text = "") {
+    super();
+    this.text = text;
+    this.fontSize = 32;
+    this.fontFamily = "Arial";
+    this.color = "white";
+    this.align = "left";
+    this.resource = null;
+
+    this.updateMetrics();
+  }
+  updateMetrics() {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    ctx.font = `${this.fontSize}px ${this.fontFamily}`;
+
+    this.width = ctx.measureText(this.text).width;
+    this.height = this.fontSize;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -663,7 +790,7 @@ async function startGame() {
   //Ui
   ui = new Sprite(app.assets["tiles_03.png"]);
   ui.title = "ui";
-  ui.zIndex = 99;
+  // ui.zIndex = 99;
   ui.setPosition(0, 0);
   ui.width = 500;
   ui.height = 100;
@@ -673,7 +800,16 @@ async function startGame() {
     console.log("UI")
     e.stopPropagation();
   })
-  app.ui.addChild(ui);
+  //app.ui.addChild(ui);
+
+  const txt = new Text("Pixel Dungeon");
+
+  txt.setPosition(0, 0);
+
+  txt.fontSize = 58;
+  
+
+  app.ui.addChild(txt);
 
 
   
