@@ -293,8 +293,7 @@ class Application {
       this.tickers.forEach(fn => fn());
       if (this.camera.mode === "free") {
         this.updatePinchZoom();
-      }
-      if(this.camera.mode === "follow"){
+      } else if(this.camera.mode === "follow"){
         this.updateCameraFollow();
       }
       this.updateTransforms(this.stage);
@@ -661,7 +660,20 @@ async function startGame() {
   tilemap.setMap(map);
   app.place.addChild(tilemap);
   
+  //Ui
+  ui = new Sprite(app.assets["tiles_03.png"]);
+  ui.title = "ui";
+  ui.zIndex = 99;
+  ui.setPosition(0, 0);
+  ui.width = 500;
+  ui.height = 100;
   
+  ui.on("click", e => {
+    
+    console.log("UI")
+    e.stopPropagation();
+  })
+  app.ui.addChild(ui);
 
 
   
@@ -693,7 +705,7 @@ async function startGame() {
   // player.setAnchor(0.5, 0.5)
   // player.setScale(-1, 1);
   playerBox.on("click",(e) => {
-    e.stopPropagation();
+    //e.stopPropagation();
 
     console.log("click: playerBox ")
   })
