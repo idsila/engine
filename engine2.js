@@ -368,10 +368,22 @@ class Application {
       ctx.drawImage( obj.resource, obj.frame.x, obj.frame.y, obj.frame.width, obj.frame.height, 0, 0, obj.width, obj.height );
     }
     if (obj instanceof Text) {
-      ctx.fillStyle = obj.color;
+
       ctx.font = `${obj.fontSize}px ${obj.fontFamily}`;
       ctx.textAlign = obj.align;
       ctx.textBaseline = "top";
+
+      // OUTLINE
+      if (obj.stroke && obj.strokeWidth > 0) {
+        ctx.strokeStyle = obj.stroke;
+        ctx.lineWidth = obj.strokeWidth;
+        ctx.lineJoin = "round";
+
+        ctx.strokeText(obj.text, 0, 0);
+      }
+
+      // FILL
+      ctx.fillStyle = obj.color;
       ctx.fillText(obj.text, 0, 0);
     }
     ctx.restore();
@@ -685,6 +697,10 @@ class Text extends Container {
     this.fontSize = 32;
     this.fontFamily = "Arial";
     this.color = "white";
+
+    this.stroke = "black";
+    this.strokeWidth = 4;
+
     this.align = "left";
     this.resource = null;
 
@@ -802,14 +818,20 @@ async function startGame() {
   })
   //app.ui.addChild(ui);
 
-  const txt = new Text("Pixel Dungeon");
-
+  const txt = new Text("GAME ENGINE");
   txt.setPosition(0, 0);
+  txt.fontFamily = "pdfont";
+  txt.strokeWidth = 5;
+  txt.fontSize = 38;
+  app.place.addChild(txt);
 
-  txt.fontSize = 58;
-  
 
-  app.ui.addChild(txt);
+  const txt2 = new Text("Pixel Dungeon");
+  txt2.setPosition(300, 280);
+  txt2.fontFamily = "pdfont";
+  txt2.strokeWidth = 1;
+  txt2.fontSize = 18;
+  app.place.addChild(txt2);
 
 
   
