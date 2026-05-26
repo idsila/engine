@@ -7,6 +7,7 @@ class Application {
     this.width = 0;
     this.height = 0;
     this.worldAlpha = 1;
+    this.currentScene = null;
   
     this.bgColor = "black";
     this.assets = {};
@@ -43,13 +44,13 @@ class Application {
     window.addEventListener("resize", () => {  this.resize() });
     
     
-    this.place = new Container();
-    this.stage.addChild(this.place);
+    this.world = new Container();
+    this.stage.addChild(this.world);
     
     this.ui = new Container();
     this.stage.addChild(this.ui);
 
-    this.place.interactive = false;
+    this.world.interactive = false;
     this.ui.interactive = false;
     
     
@@ -288,6 +289,9 @@ class Application {
   async loadAll(list) {
     await Promise.all(list.map((path) => this.loadImage(path) ));
   }
+  getAsset(name) {
+    return this.assets[name];
+  }
   
   
   
@@ -306,6 +310,9 @@ class Application {
         this.updatePinchZoom();
       } else if(this.camera.mode === "follow"){
         this.updateCameraFollow();
+      }
+      if (this.currentScene) {
+        this.currentScene.update(delta);
       }
       this.updateTransforms(this.stage);
       this.updateInput();
@@ -337,10 +344,9 @@ class Application {
 
 
   render() {
-    // WORLD
-    this.renderObject(this.place, true);
-    // UI
-    this.renderObject(this.ui, false);
+    if (!this.currentScene) return;
+    this.renderObject(this.currentScene.world, true);
+    this.renderObject(this.currentScene.ui, false);
   }
   renderObject(obj, useCamera = true) {
 
@@ -404,7 +410,7 @@ class Application {
     let hovered = this.findObject(screenX, screenY, this.ui);
 
     if (!hovered) {
-      hovered = this.findObject(world.x, world.y, this.place);
+      hovered = this.findObject(world.x, world.y, this.world);
     }
 
     if (hovered !== this.input.hovered) {
@@ -542,6 +548,17 @@ class Application {
   removeScene(){
     this.tickers = [];
   }
+  changeScene(scene) {
+    // удалить старую
+    if (this.currentScene) {
+      this.currentScene.destroy();
+    }
+
+    // новая сцена
+    this.currentScene = scene;
+    this.world.addChild(scene);
+    scene.create();
+  }
 }
 
 
@@ -665,6 +682,8 @@ class Container {
 }
 
 
+
+
 class Sprite extends Container{
   constructor(resource){
     super();
@@ -718,65 +737,237 @@ class Text extends Container {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-class Tilemap extends Container {
-  
-  constructor(texture, tileSize = 16) {
+class Scene extends Container {
+  constructor() {
     super();
-    this.texture = texture;
-    this.tileSize = tileSize;
-    this.map = [];
+    this.world = new Container();
+    this.ui = new Container();
+
+    this.addChild(this.world);
+    this.addChild(this.ui);
   }
-  setMap(map) {
-    this.map = map;
-    this.buildMap();
+
+  create() {}
+  update(delta) {}
+  destroy() {
+    super.destroy();
   }
-  
-  buildMap() {
-    this.children = [];
-    for (let y = 0; y < this.map.length; y++) {
-    
-      for (let x = 0; x < this.map[y].length; x++) {
-      
-        const id = this.map[y][x];
-      
-        const tile = new Sprite(this.texture);
-      
-        tile.width = this.tileSize;
-        tile.height = this.tileSize;
-      
-        tile.setPosition(x * this.tileSize, y * this.tileSize );
-      
-        // FLOOR
-        if (id === 0) {
-          tile.setFrame(16*6, 0,16,16);
-        }
-      
-        // WALL
-        if (id === 1) {
-          tile.setFrame(0,16*4,16,16);
-        }
-      
-        this.addChild(tile);
-      }
-    }
-  }
-  
 }
+
+
+
+
+
+
+// Game
+class MenuScene extends Scene {
+  create() {
+    const txt = new Text("MENU");
+    txt.setPosition(100, 100);
+    this.ui.addChild(txt);
+  }
+
+  update(delta) {}
+}
+
+class GameScene extends Scene {
+  create() {
+
+
+    this.txt = new Text("GAME ENGINE");
+    this.txt.setPosition(0, 0);
+    this.txt.fontFamily = "pdfont";
+    this.txt.strokeWidth = 5;
+    this.txt.fontSize = 38;
+    this.world.addChild(this.txt);
+
+
+    this.txt2 = new Text("Pixel Dungeon");
+    this.txt2.setPosition(300, 280);
+    this.txt2.fontFamily = "pdfont";
+    this.txt2.strokeWidth = 1;
+    this.txt2.fontSize = 18;
+    this.world.addChild(this.txt2);
+
+
+  
+  
+  
+    // playerBox = new Container();
+    this.playerBox = new Sprite(app.getAsset("tiles_03.png"));
+    this.playerBox.title = "playerBox";
+    this.playerBox.zIndex = 30;
+    this.playerBox.setPosition(300, 300);
+    this.playerBox.width = 100;
+    this.playerBox.height = 100;
+    this.playerBox.setAnchor(0, 0)
+    this.playerBox.setScale(1, 1);
+  
+  
+
+    //playerBox.stopPropagation();
+
+    this.player = new Sprite(app.getAsset("crab7.png"));
+    this.player.title = "player";
+    this.player.width = 100;
+    this.player.height = 100;
+    this.player.setPosition(50, 50);
+    this.player.setAnchor(0.5, 0.5)
+    this.player.setScale(1, 1);
+    //player.stopPropagation();
+  
+    // player.setAnchor(0.5, 0.5)
+    // player.setScale(-1, 1);
+    this.playerBox.on("click",(e) => {
+      //e.stopPropagation();
+
+      console.log("click: playerBox ")
+    })
+  
+  
+    this.player.on("click",(e) => {
+      //   //playerBox.position.x++;
+      //e.stopPropagation();
+
+      console.log("click: player")
+    })
+  
+  
+    this.playerBox.addChild(this.player);
+    this.world.addChild(this.playerBox);
+
+  
+
+  }
+
+  update(delta) {}
+}
+
+
+
+class GameScene12 extends Scene {
+
+  create() {
+
+    // UI PANEL
+    this.uiPanel = new Sprite(
+      app.getAsset("tiles_03.png")
+    );
+
+    this.uiPanel.title = "ui";
+
+    this.uiPanel.setPosition(0, 0);
+
+    this.uiPanel.width = 500;
+    this.uiPanel.height = 100;
+
+    this.uiPanel.on("click", e => {
+
+      console.log("UI");
+
+      e.stopPropagation();
+    });
+
+    this.ui.addChild(this.uiPanel);
+
+
+
+    // TITLE
+    this.titleText = new Text("GAME ENGINE");
+
+    this.titleText.setPosition(0, 0);
+
+    this.titleText.fontFamily = "pdfont";
+    this.titleText.strokeWidth = 5;
+    this.titleText.fontSize = 38;
+
+    this.ui.addChild(this.titleText);
+
+
+
+    // SUBTITLE
+    this.subtitleText = new Text("Pixel Dungeon");
+
+    this.subtitleText.setPosition(300, 280);
+
+    this.subtitleText.fontFamily = "pdfont";
+    this.subtitleText.strokeWidth = 1;
+    this.subtitleText.fontSize = 18;
+
+    this.world.addChild(this.subtitleText);
+
+
+
+    // PLAYER BOX
+    this.playerBox = new Sprite(
+      app.getAsset("tiles_03.png")
+    );
+
+    this.playerBox.title = "playerBox";
+
+    this.playerBox.zIndex = 30;
+
+    this.playerBox.setPosition(300, 300);
+
+    this.playerBox.width = 100;
+    this.playerBox.height = 100;
+
+    this.playerBox.setAnchor(0, 0);
+
+    this.playerBox.setScale(1, 1);
+
+
+
+    // PLAYER
+    this.player = new Sprite(
+      app.getAsset("crab7.png")
+    );
+
+    this.player.title = "player";
+
+    this.player.width = 100;
+    this.player.height = 100;
+
+    this.player.setPosition(50, 50);
+
+    this.player.setAnchor(0.5, 0.5);
+
+    this.player.setScale(1, 1);
+
+
+
+    this.playerBox.on("click", () => {
+
+      console.log("click: playerBox");
+
+    });
+
+
+
+    this.player.on("click", () => {
+
+      console.log("click: player");
+
+    });
+
+
+
+    this.playerBox.addChild(this.player);
+
+    this.world.addChild(this.playerBox);
+  }
+
+
+
+  update(delta) {
+
+  }
+}
+
+
+
+
+
 
 
 
@@ -791,102 +982,9 @@ async function startGame() {
   app = new Application();
   await app.loadAll(["tiles_sewers.png","crab7.png", "tiles_03.png", "flip3.png"])
   
-  const map = [
-    [1, 1, 1, 1, 1],
-    [1, 0, 0, 0, 1],
-    [1, 0, 0, 0, 1],
-    [1, 1, 1, 1, 1]
-  ];
   
-  const tilemap = new Tilemap(app.assets["tiles_sewers.png"],50);
-
-  tilemap.setMap(map);
-  app.place.addChild(tilemap);
-  
-  //Ui
-  ui = new Sprite(app.assets["tiles_03.png"]);
-  ui.title = "ui";
-  // ui.zIndex = 99;
-  ui.setPosition(0, 0);
-  ui.width = 500;
-  ui.height = 100;
-  
-  ui.on("click", e => {
-    
-    console.log("UI")
-    e.stopPropagation();
-  })
-  //app.ui.addChild(ui);
-
-  const txt = new Text("GAME ENGINE");
-  txt.setPosition(0, 0);
-  txt.fontFamily = "pdfont";
-  txt.strokeWidth = 5;
-  txt.fontSize = 38;
-  app.place.addChild(txt);
-
-
-  const txt2 = new Text("Pixel Dungeon");
-  txt2.setPosition(300, 280);
-  txt2.fontFamily = "pdfont";
-  txt2.strokeWidth = 1;
-  txt2.fontSize = 18;
-  app.place.addChild(txt2);
-
-
-  
-  
-  
-  // playerBox = new Container();
-  playerBox = new Sprite(app.assets["tiles_03.png"]);
-  playerBox.title = "playerBox";
-  playerBox.zIndex = 30;
-  playerBox.setPosition(300, 300);
-  playerBox.width = 100;
-  playerBox.height = 100;
-  playerBox.setAnchor(0, 0)
-  playerBox.setScale(1, 1);
-  
-  
-
-  //playerBox.stopPropagation();
-
-  player = new Sprite(app.assets["crab7.png"]);
-  player.title = "player";
-  player.width = 100;
-  player.height = 100;
-  player.setPosition(50, 50);
-  player.setAnchor(0.5, 0.5)
-  player.setScale(1, 1);
-  //player.stopPropagation();
-  
-  // player.setAnchor(0.5, 0.5)
-  // player.setScale(-1, 1);
-  playerBox.on("click",(e) => {
-    //e.stopPropagation();
-
-    console.log("click: playerBox ")
-  })
-  
-  
-  player.on("click",(e) => {
-  //   //playerBox.position.x++;
-    //e.stopPropagation();
-
-     console.log("click: player")
-  })
-  
-  
-  playerBox.addChild(player);
-  app.place.addChild(playerBox);
-
-  app.ticker.add(() => {
-    //app.follow(playerBox, 0.5);
-    //console.log('j')
-  })
-
-
-  
+  const menu = new GameScene();
+  app.changeScene(menu);
   
   app.startLoop(() => {
     //player.position(player._position.x+1, 0)
