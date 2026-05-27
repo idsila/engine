@@ -25,7 +25,7 @@ class Application {
     };
     
     
-    this.input = { x: 0, y: 0, down: false, pressed: false, released: false, hovered: null, focused: null, touches: [] }
+    this.input = { x: 0, y: 0, down: false, pressed: false, released: false, hovered: null, capturedByUI: false, focused: null, touches: [] }
     // Для камеры
     this.pointers = new Map();
     this.lastDistance = 0;
@@ -85,15 +85,18 @@ class Application {
       this.input.y = e.clientY;
 
       this.input.down = true;    
-      // pressed = только 1 кадр
       this.input.pressed = true;
       
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-      if (this.pointers.size === 1 && this.camera.mode === "free") {
-        this.drag.active = true;
-        this.drag.lastX = e.clientX;
-        this.drag.lastY = e.clientY;
+      const uiTarget = this.findObject( e.clientX, e.clientY, this.ui );
+      this.input.capturedByUI = !!uiTarget;
+      if (!this.input.capturedByUI) {
+        if (this.pointers.size === 1 && this.camera.mode === "free") {
+          this.drag.active = true;
+          this.drag.lastX = e.clientX;
+          this.drag.lastY = e.clientY;
+        }
       }
     });
 
@@ -107,7 +110,7 @@ class Application {
       }
   
       // DRAG (только free + 1 палец)
-      if (this.drag.active && this.pointers.size === 1) {
+      if (this.drag.active && this.pointers.size === 1 && !this.input.capturedByUI) {
         const dx = e.clientX - this.drag.lastX;
         const dy = e.clientY - this.drag.lastY;
     
@@ -125,9 +128,8 @@ class Application {
       this.input.y = e.clientY;
     
       this.input.down = false;
-
-      // released = только 1 кадр
       this.input.released = true; 
+      this.input.capturedByUI = false;
 
       this.pointers.delete(e.pointerId);
   
@@ -314,7 +316,10 @@ class Application {
       if (this.currentScene) {
         this.currentScene.update(delta);
       }
-      this.updateTransforms(this.stage);
+      if (this.currentScene) {
+        this.updateTransforms(this.currentScene.world);
+        this.updateTransforms(this.currentScene.ui);
+      }
       this.updateInput();
       
       this.render();
@@ -369,9 +374,12 @@ class Application {
     }
     ctx.save();
     ctx.setTransform( scaleX * this.dpr, 0, 0, scaleY * this.dpr, x * this.dpr, y * this.dpr );
+    ctx.imageSmoothingEnabled = false; // ← добавь сюда
     ctx.globalAlpha = obj.world.alpha;
-    if(obj.resource){
-      ctx.drawImage( obj.resource, obj.frame.x, obj.frame.y, obj.frame.width, obj.frame.height, 0, 0, obj.width, obj.height );
+    if (obj instanceof NineSlicePlane) {
+      obj.render(ctx);
+    } else if(obj.texture && obj.texture.resource){
+      ctx.drawImage( obj.texture.resource, obj.texture.frame.x, obj.texture.frame.y, obj.texture.frame.width, obj.texture.frame.height, 0, 0, obj.width, obj.height );
     }
     if (obj instanceof Text) {
 
@@ -399,6 +407,219 @@ class Application {
       this.renderObject(child, useCamera);
     }
   }
+
+  renderNineSlice(obj, ctx) {
+
+  const img = obj.texture.resource;
+
+  const fx = obj.texture.frame.x;
+  const fy = obj.texture.frame.y;
+
+  const sw = obj.texture.frame.width;
+  const sh = obj.texture.frame.height;
+
+  const left = obj.slice.left;
+  const top = obj.slice.top;
+  const right = obj.slice.right;
+  const bottom = obj.slice.bottom;
+
+  const dw = obj.width;
+  const dh = obj.height;
+
+  const centerSrcW = sw - left - right;
+  const centerSrcH = sh - top - bottom;
+
+  const centerDstW = dw - left - right;
+  const centerDstH = dh - top - bottom;
+
+  const drawPart = (
+    sx, sy, sw, sh,
+    dx, dy, dw, dh,
+    mode = "stretch"
+  ) => {
+
+    if (dw <= 0 || dh <= 0) return;
+
+    // STRETCH
+    if (mode === "stretch") {
+
+      ctx.drawImage(
+        img,
+        sx, sy, sw, sh,
+        dx, dy, dw, dh
+      );
+
+    }
+
+    // TILE
+    else if (mode === "tile") {
+
+      for (let xx = 0; xx < dw; xx += sw) {
+
+        for (let yy = 0; yy < dh; yy += sh) {
+
+          const tw = Math.min(sw, dw - xx);
+          const th = Math.min(sh, dh - yy);
+
+          ctx.drawImage(
+            img,
+
+            sx,
+            sy,
+
+            tw,
+            th,
+
+            dx + xx,
+            dy + yy,
+
+            tw,
+            th
+          );
+        }
+      }
+
+    }
+
+  };
+
+  const modes = obj.modes || {};
+
+  // TOP LEFT
+  drawPart(
+    fx,
+    fy,
+    left,
+    top,
+
+    0,
+    0,
+    left,
+    top,
+
+    "stretch"
+  );
+
+  // TOP
+  drawPart(
+    fx + left,
+    fy,
+    centerSrcW,
+    top,
+
+    left,
+    0,
+    centerDstW,
+    top,
+
+    modes.top || "stretch"
+  );
+
+  // TOP RIGHT
+  drawPart(
+    fx + sw - right,
+    fy,
+    right,
+    top,
+
+    dw - right,
+    0,
+    right,
+    top,
+
+    "stretch"
+  );
+
+  // LEFT
+  drawPart(
+    fx,
+    fy + top,
+    left,
+    centerSrcH,
+
+    0,
+    top,
+    left,
+    centerDstH,
+
+    modes.left || "stretch"
+  );
+
+  // CENTER
+  drawPart(
+    fx + left,
+    fy + top,
+    centerSrcW,
+    centerSrcH,
+
+    left,
+    top,
+    centerDstW,
+    centerDstH,
+
+    modes.center || "stretch"
+  );
+
+  // RIGHT
+  drawPart(
+    fx + sw - right,
+    fy + top,
+    right,
+    centerSrcH,
+
+    dw - right,
+    top,
+    right,
+    centerDstH,
+
+    modes.right || "stretch"
+  );
+
+  // BOTTOM LEFT
+  drawPart(
+    fx,
+    fy + sh - bottom,
+    left,
+    bottom,
+
+    0,
+    dh - bottom,
+    left,
+    bottom,
+
+    "stretch"
+  );
+
+  // BOTTOM
+  drawPart(
+    fx + left,
+    fy + sh - bottom,
+    centerSrcW,
+    bottom,
+
+    left,
+    dh - bottom,
+    centerDstW,
+    bottom,
+
+    modes.bottom || "stretch"
+  );
+
+  // BOTTOM RIGHT
+  drawPart(
+    fx + sw - right,
+    fy + sh - bottom,
+    right,
+    bottom,
+
+    dw - right,
+    dh - bottom,
+    right,
+    bottom,
+
+    "stretch"
+  );
+}
   
 
   updateInput() {
@@ -410,7 +631,7 @@ class Application {
     let hovered = this.findObject(screenX, screenY, this.ui);
 
     if (!hovered) {
-      hovered = this.findObject(world.x, world.y, this.world);
+      hovered = this.findObject(world.x, world.y, this.currentScene.world);
     }
 
     if (hovered !== this.input.hovered) {
@@ -549,15 +770,19 @@ class Application {
     this.tickers = [];
   }
   changeScene(scene) {
-    // удалить старую
+    this.camera.x = 0;
+    this.camera.y = 0;
+    this.camera.zoom = 1;
     if (this.currentScene) {
       this.currentScene.destroy();
     }
 
-    // новая сцена
     this.currentScene = scene;
-    this.world.addChild(scene);
+
     scene.create();
+
+    this.world.addChild(scene.world);
+    this.ui.addChild(scene.ui);
   }
 }
 
@@ -682,26 +907,28 @@ class Container {
 }
 
 
+class Texture {
+  constructor(resource, x = 0, y = 0, width = null, height = null) {
 
+    this.resource = resource;
+
+    this.frame = {
+      x,
+      y,
+      width: width ?? resource.width,
+      height: height ?? resource.height
+    };
+  }
+}
 
 class Sprite extends Container{
-  constructor(resource){
+  constructor(texture){
     super();
-    this.resource = resource;
-    this.frame = {
-      x: 0,
-      y: 0,
-      width: resource ? resource.width : 0,
-      height: resource ? resource.height : 0
-    };
-    this.width = this.frame.width;
-    this.height = this.frame.height;
-  }
-  setFrame(x, y, width, height) {
-    this.frame.x = x;
-    this.frame.y = y;
-    this.frame.width = width;
-    this.frame.height = height;
+    this.texture = texture;
+
+    this.width = texture.frame.width;
+    this.height = texture.frame.height;
+
   }
   destroy() {
     super.destroy();
@@ -736,6 +963,53 @@ class Text extends Container {
   }
 }
 
+class NineSlicePlane extends Container {
+  constructor(texture, left, top, right, bottom) {
+    super();
+    this.texture = texture;
+    this.slice = { left, top, right, bottom };
+    this.width = texture.frame.width;
+    this.height = texture.frame.height;
+  }
+
+  render(ctx) {
+    const tex = this.texture;
+    if (!tex || !tex.resource) return;
+
+    const img = tex.resource;
+    const { x: fx, y: fy, width: fw, height: fh } = tex.frame;
+    const { left: l, top: t, right: r, bottom: b } = this.slice;
+
+    const dw = this.width;
+    const dh = this.height;
+
+    const cSrcW = fw - l - r;
+    const cSrcH = fh - t - b;
+    const cDstW = dw - l - r;
+    const cDstH = dh - t - b;
+
+    const draw = (sx, sy, sw, sh, dx, dy, dw, dh) => {
+      if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) return;
+      ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+    };
+
+    // Углы — не трогаем
+    draw(fx,        fy,        l,     t,     0,    0,    l,     t    );
+    draw(fx+fw-r,   fy,        r,     t,     dw-r, 0,    r,     t    );
+    draw(fx,        fy+fh-b,   l,     b,     0,    dh-b, l,     b    );
+    draw(fx+fw-r,   fy+fh-b,   r,     b,     dw-r, dh-b, r,     b    );
+
+    // Края — растягиваем
+    draw(fx+l,      fy,        cSrcW, t,     l,    0,    cDstW, t    ); // top
+    draw(fx+l,      fy+fh-b,   cSrcW, b,     l,    dh-b, cDstW, b    ); // bottom
+    draw(fx,        fy+t,      l,     cSrcH, 0,    t,    l,     cDstH); // left
+    draw(fx+fw-r,   fy+t,      r,     cSrcH, dw-r, t,    r,     cDstH); // right
+
+    // Центр — растягиваем как в Pixi
+    draw(fx+l,      fy+t,      cSrcW, cSrcH, l,    t,    cDstW, cDstH);
+  }
+}
+
 
 class Scene extends Container {
   constructor() {
@@ -750,10 +1024,10 @@ class Scene extends Container {
   create() {}
   update(delta) {}
   destroy() {
-    super.destroy();
+    this.world.destroy();
+    this.ui.destroy();
   }
 }
-
 
 
 
@@ -772,6 +1046,26 @@ class MenuScene extends Scene {
 
 class GameScene extends Scene {
   create() {
+    const button = new NineSlicePlane(new Texture(app.getAsset("UI.png"),40, 18, 18, 18), 3,3,3,3);
+
+    button.width = 100;
+    button.height = 12;
+    
+    // button.centerMode = "strech";
+    button.setScale(3, 3); // масштаб отдельно
+    button.setPosition(100, 100);
+
+    this.ui.addChild(button);
+    
+
+    // let ui = new Sprite(app.getAsset("tiles_03.png"));
+    // ui.title = "playerBox";
+    // ui.zIndex = 30;
+    // ui.setPosition(0, 0);
+    // ui.width = 1000;
+    // ui.height = 200;
+    //this.ui.addChild(ui);
+
 
 
     let txt = new Text("GAME ENGINE");
@@ -794,7 +1088,8 @@ class GameScene extends Scene {
   
   
     // playerBox = new Container();
-    playerBox = new Sprite(app.getAsset("tiles_03.png"));
+    const texture = new Texture(app.getAsset("crab7.png"));
+    playerBox = new Sprite(texture);
     playerBox.title = "playerBox";
     playerBox.zIndex = 30;
     playerBox.setPosition(300, 300);
@@ -807,13 +1102,13 @@ class GameScene extends Scene {
 
     //playerBox.stopPropagation();
 
-    player = new Sprite(app.getAsset("crab7.png"));
-    player.title = "player";
-    player.width = 100;
-    player.height = 100;
-    player.setPosition(50, 50);
-    player.setAnchor(0.5, 0.5)
-    player.setScale(1, 1);
+    // player = new Sprite(app.getAsset("crab7.png"));
+    // player.title = "player";
+    // player.width = 100;
+    // player.height = 100;
+    // player.setPosition(50, 50);
+    // player.setAnchor(0.5, 0.5)
+    // player.setScale(1, 1);
     //player.stopPropagation();
   
     // player.setAnchor(0.5, 0.5)
@@ -825,15 +1120,15 @@ class GameScene extends Scene {
     })
   
   
-    player.on("click",(e) => {
+    //player.on("click",(e) => {
       //   //playerBox.position.x++;
       //e.stopPropagation();
 
-      console.log("click: player")
-    })
+      //console.log("click: player")
+    //})
   
   
-    playerBox.addChild(player);
+    //playerBox.addChild(player);
     this.world.addChild(playerBox);
 
   
@@ -862,7 +1157,7 @@ let app = null;
 
 async function startGame() {
   app = new Application();
-  await app.loadAll(["tiles_sewers.png","crab7.png", "tiles_03.png", "flip3.png"])
+  await app.loadAll(["UI.png","tiles_sewers.png","crab7.png", "tiles_03.png", "flip3.png"])
   
   
   const menu = new GameScene();
