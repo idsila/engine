@@ -295,7 +295,12 @@ class Application {
     return this.assets[name];
   }
   
-  
+  updateObjects(obj, delta) {
+    obj.update(delta);
+    for (const child of obj.children) {
+      this.updateObjects(child, delta);
+    }
+  }
   
   
   // Цикл для жизни приложения и отрисовки
@@ -317,6 +322,9 @@ class Application {
         this.currentScene.update(delta);
       }
       if (this.currentScene) {
+        this.updateObjects(this.currentScene.world, delta);
+        this.updateObjects(this.currentScene.ui, delta);
+
         this.updateTransforms(this.currentScene.world);
         this.updateTransforms(this.currentScene.ui);
       }
@@ -818,8 +826,8 @@ class Container {
     
     return this;
   }
-  
-  
+  update(delta) {}
+
   setPosition(x, y) {
     this.position.x = x;
     this.position.y = y;
@@ -936,6 +944,58 @@ class Sprite extends Container{
   
 }
 
+class AnimatedSprite extends Sprite {
+  constructor(textures = []) {
+    super(textures[0]);
+    this.textures = textures;
+    this.currentFrame = 0;
+    this.animationSpeed = 10;
+    this.playing = true;
+    this.loop = true;
+    this.elapsed = 0;
+  }
+
+  update(delta) {
+    if (!this.playing) return;
+    this.elapsed += delta;
+    const frameTime = 1 / this.animationSpeed;
+    while (this.elapsed >= frameTime) {
+      this.elapsed -= frameTime;
+      this.currentFrame++;
+      if (this.currentFrame >= this.textures.length) {
+        if (this.loop) {
+          this.currentFrame = 0;
+        } else {
+          this.currentFrame = this.textures.length - 1;
+          this.playing = false;
+        }
+      }
+      this.texture = this.textures[this.currentFrame];
+    }
+  }
+
+  play() {
+    this.playing = true;
+  }
+
+  stop() {
+    this.playing = false;
+  }
+
+  gotoAndStop(frame) {
+    this.currentFrame = frame;
+    this.texture = this.textures[frame];
+    this.playing = false;
+  }
+
+  gotoAndPlay(frame) {
+    this.currentFrame = frame;
+    this.texture = this.textures[frame];
+    this.playing = true;
+  }
+}
+
+
 class Text extends Container {
   constructor(text = "") {
     super();
@@ -1008,6 +1068,7 @@ class NineSlicePlane extends Container {
     // Центр — растягиваем как в Pixi
     draw(fx+l,      fy+t,      cSrcW, cSrcH, l,    t,    cDstW, cDstH);
   }
+
 }
 
 
@@ -1046,13 +1107,12 @@ class MenuScene extends Scene {
 
 class GameScene extends Scene {
   create() {
-    const button = new NineSlicePlane(new Texture(app.getAsset("UI.png"),40, 18, 18, 18), 3,3,3,3);
+    const button = new NineSlicePlane(new Texture(app.getAsset("UI.png"),20, 0, 9, 9), 3,3,3,3);
 
     button.width = 100;
-    button.height = 12;
+    button.height = 32;
     
-    // button.centerMode = "strech";
-    button.setScale(3, 3); // масштаб отдельно
+    button.setScale(6, 6); // масштаб отдельно
     button.setPosition(100, 100);
 
     this.ui.addChild(button);
