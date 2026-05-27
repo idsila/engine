@@ -747,22 +747,42 @@ class Application {
     }
   }
   
-  // updTrans
-  updateTransforms(obj, parent = { x: 0, y: 0, scaleX: 1, scaleY: 1, alpha: 1 }) {
-    const ax = obj.anchor.x * obj.width;
-    const ay = obj.anchor.y * obj.height;
-  
-    obj.world.scaleX = parent.scaleX * obj.scale.x;
-    obj.world.scaleY = parent.scaleY * obj.scale.y;
-    obj.world.alpha = parent.alpha * obj.alpha;
-    
-    obj.world.x = parent.x + (obj.position.x - ax * obj.scale.x) * parent.scaleX;
-    obj.world.y = parent.y + (obj.position.y - ay * obj.scale.y) * parent.scaleY;
-  
-    for (const child of obj.children) {
-      this.updateTransforms( child, { x: obj.world.x, y: obj.world.y, scaleX: obj.world.scaleX, scaleY: obj.world.scaleY,alpha: obj.world.alpha });
-    }
+
+  updateTransforms(obj, parent = {
+  x: 0,
+  y: 0,
+  scaleX: 1,
+  scaleY: 1,
+  alpha: 1
+}) {
+
+  const ax = obj.anchor.x * obj.width;
+  const ay = obj.anchor.y * obj.height;
+
+  obj.world.scaleX = parent.scaleX * obj.scale.x;
+  obj.world.scaleY = parent.scaleY * obj.scale.y;
+  obj.world.alpha = parent.alpha * obj.alpha;
+
+  obj.world.x =
+    parent.x +
+    (obj.position.x - ax) * parent.scaleX;
+
+  obj.world.y =
+    parent.y +
+    (obj.position.y - ay) * parent.scaleY;
+
+  for (const child of obj.children) {
+
+    this.updateTransforms(child, {
+      x: obj.world.x,
+      y: obj.world.y,
+      scaleX: obj.world.scaleX,
+      scaleY: obj.world.scaleY,
+      alpha: obj.world.alpha
+    });
+
   }
+}
   
   
 
@@ -956,23 +976,34 @@ class AnimatedSprite extends Sprite {
   }
 
   update(delta) {
-    if (!this.playing) return;
-    this.elapsed += delta;
-    const frameTime = 1 / this.animationSpeed;
-    while (this.elapsed >= frameTime) {
-      this.elapsed -= frameTime;
-      this.currentFrame++;
-      if (this.currentFrame >= this.textures.length) {
-        if (this.loop) {
-          this.currentFrame = 0;
-        } else {
-          this.currentFrame = this.textures.length - 1;
-          this.playing = false;
-        }
+  if (!this.playing) return;
+
+  this.elapsed += delta;
+
+  const frameTime = 1 / this.animationSpeed;
+
+  while (this.elapsed >= frameTime) {
+
+    this.elapsed -= frameTime;
+
+    this.currentFrame++;
+
+    if (this.currentFrame >= this.textures.length) {
+
+      if (this.loop) {
+        this.currentFrame = 0;
+      } else {
+        this.currentFrame = this.textures.length - 1;
+        this.playing = false;
       }
-      this.texture = this.textures[this.currentFrame];
     }
+
+    this.texture = this.textures[this.currentFrame];
+
+    this.width = this.texture.frame.width;
+    this.height = this.texture.frame.height;
   }
+}
 
   play() {
     this.playing = true;
@@ -1093,7 +1124,7 @@ class Scene extends Container {
 
 
 
-
+let crab = null;
 // Game
 class MenuScene extends Scene {
   create() {
@@ -1107,6 +1138,24 @@ class MenuScene extends Scene {
 
 class GameScene extends Scene {
   create() {
+
+    const frames = [
+      new Texture(app.getAsset("rogue.png"), 0, 0, 12, 16),
+      new Texture(app.getAsset("rogue.png"), 12, 0, 12, 16),
+      new Texture(app.getAsset("rogue.png"), 24, 0, 12, 16),
+    ];
+
+     crab = new AnimatedSprite(frames);
+
+    crab.animationSpeed = 3;
+    crab.setPosition(100,400)
+    crab.setScale(3,3)
+    crab.play();
+    this.world.addChild(crab);
+
+
+
+
     const button = new NineSlicePlane(new Texture(app.getAsset("UI.png"),20, 0, 9, 9), 3,3,3,3);
 
     button.width = 100;
@@ -1217,7 +1266,7 @@ let app = null;
 
 async function startGame() {
   app = new Application();
-  await app.loadAll(["UI.png","tiles_sewers.png","crab7.png", "tiles_03.png", "flip3.png"])
+  await app.loadAll(["rogue.png","UI.png","tiles_sewers.png","crab7.png", "tiles_03.png", "flip3.png"])
   
   
   const menu = new GameScene();
