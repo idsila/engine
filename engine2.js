@@ -296,6 +296,7 @@ class Application {
   }
   
   updateObjects(obj, delta) {
+    //console.log(obj.constructor.name, obj.elapsed);
     obj.update(delta);
     for (const child of obj.children) {
       this.updateObjects(child, delta);
@@ -304,11 +305,22 @@ class Application {
   
   
   // Цикл для жизни приложения и отрисовки
-  startLoop(update) {
+  startLoop2(update) {
     let last = performance.now();
-    const loop = (now) => {
-      const delta = (now - last) / 1000;
+    const loop = (now = performance.now()) => {
+      if (typeof now !== "number") {
+        now = performance.now();
+      }
+
+      const delta = Math.min((now - last) / 1000, 0.05);
+      console.log("now =", now);
+      console.log("last =", last);
+      console.log("delta =", delta);
+      
+      
       last = now;
+      if (!Number.isFinite(delta)) return;
+
       this.delta = delta
       this.clear();
       update(delta);
@@ -335,6 +347,48 @@ class Application {
     };
     loop();
   }  
+  startLoop(update) {
+    let last = performance.now();
+
+    const loop = (now = performance.now()) => {
+      if (typeof now !== "number") {
+        now = performance.now();
+      }
+
+      const delta = Math.min((now - last) / 1000, 0.05);
+      last = now;
+
+      if (!Number.isFinite(delta)) return;
+
+      this.clear();
+      update(delta);
+
+      this.tickers.forEach(fn => fn());
+
+      if (this.camera.mode === "free") {
+        this.updatePinchZoom();
+      } else if (this.camera.mode === "follow") {
+        this.updateCameraFollow();
+      }
+
+      if (this.currentScene) {
+        this.currentScene.update(delta);
+        this.updateObjects(this.currentScene.world, delta);
+        this.updateObjects(this.currentScene.ui, delta);
+
+        this.updateTransforms(this.currentScene.world);
+        this.updateTransforms(this.currentScene.ui);
+      }
+
+      this.updateInput();
+
+      this.render();
+
+      requestAnimationFrame(loop);
+    };
+
+    requestAnimationFrame(loop);
+  }
   
   
   // Очистака кадра
@@ -729,7 +783,7 @@ class Sprite extends Container{
   
 }
 
-class AnimatedSprite extends Sprite {
+class AnimatedSprite2 extends Sprite {
   constructor(textures = []) {
     super(textures[0]);
     this.textures = textures;
@@ -741,34 +795,36 @@ class AnimatedSprite extends Sprite {
   }
 
   update(delta) {
-  if (!this.playing) return;
+    
+    if (!this.playing) return;
 
-  this.elapsed += delta;
+    this.elapsed += delta;
+    
+    const frameTime = 1 / this.animationSpeed;
+    
 
-  const frameTime = 1 / this.animationSpeed;
+    while (this.elapsed >= frameTime) {
 
-  while (this.elapsed >= frameTime) {
+      this.elapsed -= frameTime;
 
-    this.elapsed -= frameTime;
+      this.currentFrame++;
 
-    this.currentFrame++;
+      if (this.currentFrame >= this.textures.length) {
 
-    if (this.currentFrame >= this.textures.length) {
-
-      if (this.loop) {
-        this.currentFrame = 0;
-      } else {
-        this.currentFrame = this.textures.length - 1;
-        this.playing = false;
+        if (this.loop) {
+          this.currentFrame = 0;
+        } else {
+          this.currentFrame = this.textures.length - 1;
+          this.playing = false;
+        }
       }
+
+      this.texture = this.textures[this.currentFrame];
+
+      this.width = this.texture.frame.width;
+      this.height = this.texture.frame.height;
     }
-
-    this.texture = this.textures[this.currentFrame];
-
-    this.width = this.texture.frame.width;
-    this.height = this.texture.frame.height;
   }
-}
 
   play() {
     this.playing = true;
@@ -790,6 +846,84 @@ class AnimatedSprite extends Sprite {
     this.playing = true;
   }
 }
+
+
+
+class AnimationClip {
+  constructor(name, frames, speed = 10, loop = true) {
+    this.name = name;
+    this.frames = frames;
+    this.speed = speed;
+    this.loop = loop;
+  }
+}
+class Animator {
+  constructor(sprite) {
+    this.sprite = sprite;
+    this.clips = new Map();
+    this.current = null;
+
+    this.elapsed = 0;
+    this.frameIndex = 0;
+  }
+
+  addClip(clip) {
+    this.clips.set(clip.name, clip);
+  }
+
+  play(name) {
+    if (this.current?.name === name) return;
+
+    this.current = this.clips.get(name);
+    this.frameIndex = 0;
+    this.elapsed = 0;
+
+    this.sprite.texture = this.current.frames[0];
+  }
+
+  update(delta) {
+    if (!this.current) return;
+
+    const clip = this.current;
+
+    this.elapsed += delta;
+
+    const frameTime = 1 / clip.speed;
+
+    while (this.elapsed >= frameTime) {
+      this.elapsed -= frameTime;
+      this.frameIndex++;
+
+      if (this.frameIndex >= clip.frames.length) {
+        if (clip.loop) {
+          this.frameIndex = 0;
+        } else {
+          this.frameIndex = clip.frames.length - 1;
+          break;
+        }
+      }
+
+      this.sprite.texture = clip.frames[this.frameIndex];
+      this.sprite.width = this.sprite.texture.frame.width;
+      this.sprite.height = this.sprite.texture.frame.height;
+    }
+  }
+}
+class AnimatedSprite extends Sprite {
+  constructor(texture) {
+    super(texture);
+    this.animator = new Animator(this);
+  }
+
+  update(delta) {
+    this.animator.update(delta);
+  }
+}
+
+
+
+
+
 
 
 class Text extends Container {
@@ -896,12 +1030,37 @@ class Scene extends Container {
 
 
 let crab = null;
+let armor = 1;
 // Game
 class MenuScene extends Scene {
   create() {
-    const txt = new Text("MENU");
-    txt.setPosition(100, 100);
-    this.ui.addChild(txt);
+    //const txt = new Text("MENU");
+    //txt.setPosition(0, 100);
+    //this.ui.addChild(txt);
+
+    const button = new NineSlicePlane(new Texture(app.getAsset("UI.png"),20, 0, 9, 9), 3,3,3,3);
+
+    button.width = app.width*0.9 / 3;;
+    button.height = 25;
+    
+    button.setScale(3, 3); // масштаб отдельно
+    button.setPosition(app.width*0.05, 100);
+
+
+
+    const txt = new Text("GAME ENGINE");
+    txt.setPosition(0, 0);
+    txt.fontFamily = "pdfont";
+    txt.strokeWidth = 2;
+    txt.fontSize = 8;
+    button.addChild(txt);
+
+
+    this.ui.addChild(button);
+
+
+
+
   }
 
   update(delta) {}
@@ -909,20 +1068,50 @@ class MenuScene extends Scene {
 
 class GameScene extends Scene {
   create() {
+    
 
-    const frames = [
+
+
+
+    crab = new AnimatedSprite(new Texture(app.getAsset("rogue.png"), 0, 0, 12, 16));
+
+    crab.animator.addClip(new AnimationClip("stand", [
       new Texture(app.getAsset("rogue.png"), 0, 0, 12, 16),
       new Texture(app.getAsset("rogue.png"), 12, 0, 12, 16),
+    ], 0.5, true ));
+    
+    crab.animator.addClip(new AnimationClip("walk", [
       new Texture(app.getAsset("rogue.png"), 24, 0, 12, 16),
-    ];
+      new Texture(app.getAsset("rogue.png"), 36, 0, 12, 16),
+      new Texture(app.getAsset("rogue.png"), 48, 0, 12, 16),
+      new Texture(app.getAsset("rogue.png"), 60, 0, 12, 16),
+      new Texture(app.getAsset("rogue.png"), 72, 0, 12, 16)
+    ], 15, true ));
 
-     crab = new AnimatedSprite(frames);
+    crab.animator.addClip(new AnimationClip("hit", [
+      new Texture(app.getAsset("rogue.png"), 156, 0, 12, 16),
+      new Texture(app.getAsset("rogue.png"), 168, 0, 12, 16),
+      new Texture(app.getAsset("rogue.png"), 180, 0, 12, 16)
+    ], 10, true ));
 
-    crab.animationSpeed = 3;
-    crab.setPosition(100,400)
-    crab.setScale(3,3)
-    crab.play();
+    crab.animator.addClip(new AnimationClip("use", [
+      new Texture(app.getAsset("rogue.png"), 192, 0, 12, 16),
+      new Texture(app.getAsset("rogue.png"), 204, 0, 12, 16),
+    ], 3, true ));
+
+    crab.animator.addClip(new AnimationClip("read", [
+      // new Texture(app.getAsset("rogue.png"), 216, 0, 12, 16),
+      new Texture(app.getAsset("rogue.png"), 228, 0, 12, 16),
+      new Texture(app.getAsset("rogue.png"), 240, 0, 12, 16),
+    ], 3, true ));
+
+
+    //crab.animationSpeed = 5;
+    crab.setPosition(100, 400);
+    crab.setScale(5,5)
+    crab.animator.play("stand");
     this.world.addChild(crab);
+    console.log("after addChild", crab.elapsed);
 
 
 
@@ -1040,8 +1229,9 @@ async function startGame() {
   await app.loadAll(["rogue.png","UI.png","tiles_sewers.png","crab7.png", "tiles_03.png", "flip3.png"])
   
   
-  const menu = new GameScene();
-  app.changeScene(menu);
+  const game = new GameScene();
+  const menu = new MenuScene();
+  app.changeScene(game);
   
   app.startLoop(() => {
     //player.position(player._position.x+1, 0)
