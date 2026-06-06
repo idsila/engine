@@ -1074,10 +1074,12 @@ class NineSlicePlane extends Container {
     const dw = this.width;
     const dh = this.height;
 
+
+
     const cSrcW = fw - l - r;
     const cSrcH = fh - t - b;
-    const cDstW = dw - l - r;
-    const cDstH = dh - t - b;
+    const cDstW = Math.round(dw - l - r);
+    const cDstH = Math.round(dh - t - b);
 
     const draw = (sx, sy, sw, sh, dx, dy, dw, dh) => {
       if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) return;
