@@ -367,8 +367,8 @@ class Application {
 
     const ctx = this.ctx;
 
-    let x = obj.world.x;
-    let y = obj.world.y;
+    let x = Math.round(obj.world.x);
+    let y = Math.round(obj.world.y);
     let scaleX = obj.world.scaleX;
     let scaleY = obj.world.scaleY;
 
@@ -1158,10 +1158,10 @@ class GameScene extends Scene {
 
     const button = new NineSlicePlane(new Texture(app.getAsset("UI.png"),20, 0, 9, 9), 3,3,3,3);
 
-    button.width = 600;
-    button.height = 192;
+    button.width = 100;
+    button.height = 32;
     
-    button.setScale(1, 1); // масштаб отдельно
+    button.setScale(6, 6); // масштаб отдельно
     button.setPosition(100, 100);
 
     this.world.addChild(button);
