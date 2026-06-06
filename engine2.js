@@ -1158,10 +1158,10 @@ class GameScene extends Scene {
 
     const button = new NineSlicePlane(new Texture(app.getAsset("UI.png"),20, 0, 9, 9), 3,3,3,3);
 
-    button.width = 100;
-    button.height = 32;
+    button.width = 600;
+    button.height = 192;
     
-    button.setScale(6, 6); // масштаб отдельно
+    button.setScale(1, 1); // масштаб отдельно
     button.setPosition(100, 100);
 
     this.ui.addChild(button);
