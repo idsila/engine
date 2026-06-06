@@ -1164,7 +1164,7 @@ class GameScene extends Scene {
     button.setScale(1, 1); // масштаб отдельно
     button.setPosition(100, 100);
 
-    this.ui.addChild(button);
+    this.world.addChild(button);
     
 
     // let ui = new Sprite(app.getAsset("tiles_03.png"));
