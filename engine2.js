@@ -1082,6 +1082,10 @@ class NineSlicePlane extends Container {
     const cDstH = Math.round(dh - t - b);
 
     const draw = (sx, sy, sw, sh, dx, dy, dw, dh) => {
+      dx = Math.round(dx);
+      dy = Math.round(dy);
+      dw = Math.round(dw);
+      dh = Math.round(dh);
       if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) return;
       ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
     };
