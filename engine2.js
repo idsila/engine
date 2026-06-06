@@ -416,219 +416,6 @@ class Application {
     }
   }
 
-  renderNineSlice(obj, ctx) {
-
-  const img = obj.texture.resource;
-
-  const fx = obj.texture.frame.x;
-  const fy = obj.texture.frame.y;
-
-  const sw = obj.texture.frame.width;
-  const sh = obj.texture.frame.height;
-
-  const left = obj.slice.left;
-  const top = obj.slice.top;
-  const right = obj.slice.right;
-  const bottom = obj.slice.bottom;
-
-  const dw = obj.width;
-  const dh = obj.height;
-
-  const centerSrcW = sw - left - right;
-  const centerSrcH = sh - top - bottom;
-
-  const centerDstW = dw - left - right;
-  const centerDstH = dh - top - bottom;
-
-  const drawPart = (
-    sx, sy, sw, sh,
-    dx, dy, dw, dh,
-    mode = "stretch"
-  ) => {
-
-    if (dw <= 0 || dh <= 0) return;
-
-    // STRETCH
-    if (mode === "stretch") {
-
-      ctx.drawImage(
-        img,
-        sx, sy, sw, sh,
-        dx, dy, dw, dh
-      );
-
-    }
-
-    // TILE
-    else if (mode === "tile") {
-
-      for (let xx = 0; xx < dw; xx += sw) {
-
-        for (let yy = 0; yy < dh; yy += sh) {
-
-          const tw = Math.min(sw, dw - xx);
-          const th = Math.min(sh, dh - yy);
-
-          ctx.drawImage(
-            img,
-
-            sx,
-            sy,
-
-            tw,
-            th,
-
-            dx + xx,
-            dy + yy,
-
-            tw,
-            th
-          );
-        }
-      }
-
-    }
-
-  };
-
-  const modes = obj.modes || {};
-
-  // TOP LEFT
-  drawPart(
-    fx,
-    fy,
-    left,
-    top,
-
-    0,
-    0,
-    left,
-    top,
-
-    "stretch"
-  );
-
-  // TOP
-  drawPart(
-    fx + left,
-    fy,
-    centerSrcW,
-    top,
-
-    left,
-    0,
-    centerDstW,
-    top,
-
-    modes.top || "stretch"
-  );
-
-  // TOP RIGHT
-  drawPart(
-    fx + sw - right,
-    fy,
-    right,
-    top,
-
-    dw - right,
-    0,
-    right,
-    top,
-
-    "stretch"
-  );
-
-  // LEFT
-  drawPart(
-    fx,
-    fy + top,
-    left,
-    centerSrcH,
-
-    0,
-    top,
-    left,
-    centerDstH,
-
-    modes.left || "stretch"
-  );
-
-  // CENTER
-  drawPart(
-    fx + left,
-    fy + top,
-    centerSrcW,
-    centerSrcH,
-
-    left,
-    top,
-    centerDstW,
-    centerDstH,
-
-    modes.center || "stretch"
-  );
-
-  // RIGHT
-  drawPart(
-    fx + sw - right,
-    fy + top,
-    right,
-    centerSrcH,
-
-    dw - right,
-    top,
-    right,
-    centerDstH,
-
-    modes.right || "stretch"
-  );
-
-  // BOTTOM LEFT
-  drawPart(
-    fx,
-    fy + sh - bottom,
-    left,
-    bottom,
-
-    0,
-    dh - bottom,
-    left,
-    bottom,
-
-    "stretch"
-  );
-
-  // BOTTOM
-  drawPart(
-    fx + left,
-    fy + sh - bottom,
-    centerSrcW,
-    bottom,
-
-    left,
-    dh - bottom,
-    centerDstW,
-    bottom,
-
-    modes.bottom || "stretch"
-  );
-
-  // BOTTOM RIGHT
-  drawPart(
-    fx + sw - right,
-    fy + sh - bottom,
-    right,
-    bottom,
-
-    dw - right,
-    dh - bottom,
-    right,
-    bottom,
-
-    "stretch"
-  );
-}
-  
 
   updateInput() {
     const screenX = this.input.x;
@@ -748,41 +535,21 @@ class Application {
   }
   
 
-  updateTransforms(obj, parent = {
-  x: 0,
-  y: 0,
-  scaleX: 1,
-  scaleY: 1,
-  alpha: 1
-}) {
+  updateTransforms(obj, parent = { x: 0, y: 0, scaleX: 1, scaleY: 1, alpha: 1 }) {
+    const ax = obj.anchor.x * obj.width;
+    const ay = obj.anchor.y * obj.height;
 
-  const ax = obj.anchor.x * obj.width;
-  const ay = obj.anchor.y * obj.height;
+    obj.world.scaleX = parent.scaleX * obj.scale.x;
+    obj.world.scaleY = parent.scaleY * obj.scale.y;
+    obj.world.alpha = parent.alpha * obj.alpha;
 
-  obj.world.scaleX = parent.scaleX * obj.scale.x;
-  obj.world.scaleY = parent.scaleY * obj.scale.y;
-  obj.world.alpha = parent.alpha * obj.alpha;
+    obj.world.x = parent.x + (obj.position.x - ax) * parent.scaleX;
+    obj.world.y = parent.y + (obj.position.y - ay) * parent.scaleY;
 
-  obj.world.x =
-    parent.x +
-    (obj.position.x - ax) * parent.scaleX;
-
-  obj.world.y =
-    parent.y +
-    (obj.position.y - ay) * parent.scaleY;
-
-  for (const child of obj.children) {
-
-    this.updateTransforms(child, {
-      x: obj.world.x,
-      y: obj.world.y,
-      scaleX: obj.world.scaleX,
-      scaleY: obj.world.scaleY,
-      alpha: obj.world.alpha
-    });
-
+    for (const child of obj.children) {
+      this.updateTransforms(child, { x: obj.world.x, y: obj.world.y, scaleX: obj.world.scaleX, scaleY: obj.world.scaleY, alpha: obj.world.alpha });
+    }
   }
-}
   
   
 
@@ -791,9 +558,7 @@ class Application {
   
   
   // Отрисовка сцен
-  drawScene(array){
-    
-  }
+  drawScene(array){}
   removeScene(){
     this.tickers = [];
   }
@@ -1082,10 +847,10 @@ class NineSlicePlane extends Container {
     const cDstH = Math.round(dh - t - b);
 
     const draw = (sx, sy, sw, sh, dx, dy, dw, dh) => {
-      dx -= 0.5;
-      dy -= 0.5;
-      dw += 1;
-      dh += 1;
+      dx -= 0.12;
+      dy -= 0.12;
+      dw += 0.12;
+      dh += 0.12;
       if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) return;
       ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
     };
