@@ -1119,14 +1119,35 @@ class GameScene extends Scene {
 
 
     const button = new NineSlicePlane(new Texture(app.getAsset("UI.png"),20, 0, 9, 9), 3,3,3,3);
+    const text = new Text("Войти в игру");
+    // text.setPosition(0, 0);
+    // txt.fontFamily = "pdfont";
+    // txt.strokeWidth = 5;
+    // txt.fontSize = 38;
+    this.world.addChild(optionBtn(button, 3, 100, 0.9, 25, text));
+  
 
-    button.width = 100;
-    button.height = 32;
-    
-    button.setScale(6, 6); // масштаб отдельно
-    button.setPosition(100, 100);
+    function optionBtn(obj, scale, y, width = 0.90, height = 32, title, size = 16){
+      obj.width = app.width/scale*width;
+      obj.height = height;
+      
+      obj.setScale(scale, scale); // масштаб отдельно
+      obj.setPosition(app.width*((1-width)/2), y);
 
-    this.world.addChild(button);
+
+      title.setPosition(0, 0);
+      title.fontFamily = "pdfont";
+      //title.strokeWidth = 6/scale;
+      title.fontSize = (height/scale);
+      title.setPosition(app.width/(scale*2)-title.width/(scale*2), height/(2)-title.height/(scale*2))
+      console.log(title.width)
+      //title.setAnchor(0,0)
+
+      obj.addChild(title);
+      
+
+      return obj;
+    }
     
 
     // let ui = new Sprite(app.getAsset("tiles_03.png"));
