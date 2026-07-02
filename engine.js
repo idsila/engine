@@ -783,70 +783,6 @@ class Sprite extends Container{
   
 }
 
-class AnimatedSprite2 extends Sprite {
-  constructor(textures = []) {
-    super(textures[0]);
-    this.textures = textures;
-    this.currentFrame = 0;
-    this.animationSpeed = 10;
-    this.playing = true;
-    this.loop = true;
-    this.elapsed = 0;
-  }
-
-  update(delta) {
-    
-    if (!this.playing) return;
-
-    this.elapsed += delta;
-    
-    const frameTime = 1 / this.animationSpeed;
-    
-
-    while (this.elapsed >= frameTime) {
-
-      this.elapsed -= frameTime;
-
-      this.currentFrame++;
-
-      if (this.currentFrame >= this.textures.length) {
-
-        if (this.loop) {
-          this.currentFrame = 0;
-        } else {
-          this.currentFrame = this.textures.length - 1;
-          this.playing = false;
-        }
-      }
-
-      this.texture = this.textures[this.currentFrame];
-
-      this.width = this.texture.frame.width;
-      this.height = this.texture.frame.height;
-    }
-  }
-
-  play() {
-    this.playing = true;
-  }
-
-  stop() {
-    this.playing = false;
-  }
-
-  gotoAndStop(frame) {
-    this.currentFrame = frame;
-    this.texture = this.textures[frame];
-    this.playing = false;
-  }
-
-  gotoAndPlay(frame) {
-    this.currentFrame = frame;
-    this.texture = this.textures[frame];
-    this.playing = true;
-  }
-}
-
 
 
 class AnimationClip {
@@ -1036,34 +972,61 @@ let armor = 1;
 // Game
 class MenuScene extends Scene {
   create() {
-    //const txt = new Text("MENU");
-    //txt.setPosition(0, 100);
-    //this.ui.addChild(txt);
+    const button = new NineSlicePlane(new Texture(app.getAsset("UI.png"),20, 9, 9, 9), 3,3,3,3);
+    this.ui.addChild(optionBtn(button, 3, 100, 0.90, 20, "Войти в игру", 22, 4));
+  
 
-    const button = new NineSlicePlane(new Texture(app.getAsset("UI.png"),20, 0, 9, 9), 3,3,3,3);
+    function optionBtn(obj, scale, y, width = 0.90, height = 32, text = 'Пусто', size = 16, stroke = 6){
+      const title = new Text(text);
+      const icon =  new Sprite(new Texture(app.getAsset("icons.png"), 68, 0, 17, 16));
+      obj.width = app.width/scale*width;
+      obj.height = height;
+      
+      obj.setScale(scale, scale); // масштаб отдельно
+      obj.setPosition(app.width*((1-width)/2), y);
+      
+      title.fontFamily = "pdfont";
+      title.fontSize = size / scale;
+      title.strokeWidth = stroke / scale;
+      title.updateMetrics();
+      
+      icon.width = 15;
+      icon.height = 15;
+      icon.setPosition((obj.width - (icon.width+title.width)) / 2, (obj.height - icon.height) / 2);
+      obj.addChild(icon);
+      
+      title.setPosition(((obj.width+icon.width+5)- title.width) / 2, (obj.height - title.height) / 2);
 
-    button.width = app.width*0.9 / 3;;
-    button.height = 25;
-    
-    button.setScale(3, 3); // масштаб отдельно
-    button.setPosition(app.width*0.05, 100);
 
+      obj.addChild(title);
+      
 
+      return obj;
+    }
+ 
 
-    const txt = new Text("GAME ENGINE");
-    txt.setPosition(0, 0);
-    txt.fontFamily = "pdfont";
-    txt.strokeWidth = 2;
-    txt.fontSize = 8;
-    button.addChild(txt);
-
-
-    this.ui.addChild(button);
 
 
 
 
   }
+  createButton(sprite, width, height, scale, y, title, icon) {
+  sprite.width = app.width / scale * width;
+  sprite.height = height;
+  
+  sprite.setScale(scale, scale);
+  sprite.setPosition(app.width * ((1 - width) / 2), y);
+  
+  icon.setPosition((sprite.width - (icon.width + title.width)) / 2, (sprite.height - icon.height) / 2);
+  
+  sprite.addChild(icon);
+  
+  title.setPosition(((sprite.width + icon.width + 5) - title.width) / 2, (sprite.height - title.height) / 2);
+  
+  sprite.addChild(title);
+  
+  return sprite;
+}
 
   update(delta) {}
 }
@@ -1116,32 +1079,32 @@ class GameScene extends Scene {
     console.log("after addChild", crab.elapsed);
 
 
-
-
-    const button = new NineSlicePlane(new Texture(app.getAsset("UI.png"),20, 0, 9, 9), 3,3,3,3);
-    const text = new Text("Войти в игру");
-    // text.setPosition(0, 0);
-    // txt.fontFamily = "pdfont";
-    // txt.strokeWidth = 5;
-    // txt.fontSize = 38;
-    this.world.addChild(optionBtn(button, 3, 100, 0.9, 25, text));
+        
+    const button = new NineSlicePlane(new Texture(app.getAsset("UI.png"),20, 9, 9, 9), 3,3,3,3);
+    this.ui.addChild(optionBtn(button, 3, 100, 0.90, 20, "Войти в игру", 22, 4));
   
 
-    function optionBtn(obj, scale, y, width = 0.90, height = 32, title, size = 16){
+    function optionBtn(obj, scale, y, width = 0.90, height = 32, text = 'Пусто', size = 16, stroke = 6){
+      const title = new Text(text);
+      const icon =  new Sprite(new Texture(app.getAsset("icons.png"), 68, 0, 17, 16));
       obj.width = app.width/scale*width;
       obj.height = height;
       
       obj.setScale(scale, scale); // масштаб отдельно
       obj.setPosition(app.width*((1-width)/2), y);
-
-
-      title.setPosition(0, 0);
+      
       title.fontFamily = "pdfont";
-      //title.strokeWidth = 6/scale;
-      title.fontSize = (height/scale);
-      title.setPosition(app.width/(scale*2)-title.width/(scale*2), height/(2)-title.height/(scale*2))
-      console.log(title.width)
-      //title.setAnchor(0,0)
+      title.fontSize = size / scale;
+      title.strokeWidth = stroke / scale;
+      title.updateMetrics();
+      
+      icon.width = 15;
+      icon.height = 15;
+      icon.setPosition((obj.width - (icon.width+title.width)) / 2, (obj.height - icon.height) / 2);
+      obj.addChild(icon);
+      
+      title.setPosition(((obj.width+icon.width+5)- title.width) / 2, (obj.height - title.height) / 2);
+
 
       obj.addChild(title);
       
@@ -1249,12 +1212,12 @@ let app = null;
 
 async function startGame() {
   app = new Application();
-  await app.loadAll(["rogue.png","UI.png","tiles_sewers.png","crab7.png", "tiles_03.png", "flip3.png"])
+  await app.loadAll(["rogue.png", "icons.png","UI.png","tiles_sewers.png","crab7.png", "tiles_03.png", "flip3.png"])
   
   
   const game = new GameScene();
   const menu = new MenuScene();
-  app.changeScene(game);
+  app.changeScene(menu);
   
   app.startLoop(() => {
     //player.position(player._position.x+1, 0)
